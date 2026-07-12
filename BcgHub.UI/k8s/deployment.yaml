@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bcg-hub-ui
+  namespace: bcg-hub
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: bcg-hub-ui
+  template:
+    metadata:
+      labels:
+        app: bcg-hub-ui
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: bcg-hub-ui
+          image: ghcr.io/radixal-sro/bcg-hub-ui:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80

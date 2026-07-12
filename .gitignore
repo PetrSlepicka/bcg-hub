@@ -1,0 +1,13 @@
+/.dotnet
+/.vs
+/.pnpm-store
+
+/BcgHub.Api/bin
+/BcgHub.Api/obj
+/BcgHub.Api.Tests/bin
+/BcgHub.Api.Tests/obj
+/BcgHub.UI/dist
+/BcgHub.UI/node_modules
+
+/RadixalATS.API/
+/RadixalATS.UI/

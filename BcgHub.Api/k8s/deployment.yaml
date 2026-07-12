@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bcg-hub-api
+  namespace: bcg-hub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bcg-hub-api
+  template:
+    metadata:
+      labels:
+        app: bcg-hub-api
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: bcg-hub-api
+          image: ghcr.io/radixal-sro/bcg-hub-api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ASPNETCORE_URLS
+              value: "http://+:8080"
+            - name: ASPNETCORE_PATHBASE
+              value: "/bcg-hub"
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Production"
+            - name: ConnectionStrings__DefaultConnection
+              valueFrom:
+                secretKeyRef:
+                  name: bcg-hub-secrets
+                  key: DB
+            - name: Cors__Origins__0
+              value: "https://dev.radixal.net"

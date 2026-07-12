@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: bcg-hub-ui
+  namespace: bcg-hub
+spec:
+  selector:
+    app: bcg-hub-ui
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
