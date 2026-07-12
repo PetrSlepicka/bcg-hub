@@ -65,7 +65,10 @@ export interface ManagedUserInput { fullName: string; email: string; isActive?: 
 export interface EmailSettings { imapServer: string; imapPort: number; imapUseSsl: boolean; imapUsername: string; hasImapPassword: boolean; smtpServer: string; smtpPort: number; smtpUseSsl: boolean; smtpUsername: string; hasSmtpPassword: boolean; senderAddress: string; senderName?: string; isActive: boolean }
 export interface SaveEmailSettings { imapServer: string; imapPort: number; imapUseSsl: boolean; imapUsername: string; imapPassword: string; smtpServer: string; smtpPort: number; smtpUseSsl: boolean; smtpUsername: string; smtpPassword: string; senderAddress: string; senderName?: string; isActive: boolean }
 export interface EmailMessage { id: string; direction: "Inbound" | "Outbound"; fromAddress: string; fromName?: string; toAddress: string; subject: string; bodyText?: string; bodyHtml?: string; occurredAtUtc: string; isRead: boolean; hasAttachments: boolean; businessPartnerId?: string; businessPartnerName?: string; orderId?: string; orderNumber?: string; version: number }
+export interface EmailTransportQuoteContext { carrier: PartnerReference; suggestedOrderId?: string; orders: EmailOrderOption[] }
 export interface EmailOrderOption { id: string; number: string; title: string; customerName: string }
 export interface EmailOrderOptions { suggested: EmailOrderOption[]; other: EmailOrderOption[] }
+export type EmailSenderType = "Carrier" | "Warehouse" | "Collaborator" | "Customer" | "Partner" | "Unknown";
+export interface EmailActionContext { senderType: EmailSenderType; matchedBy: "Address" | "Domain" | "None"; partner?: PartnerReference }
 export interface EmailTemplate { id: string; name: string; subject: string; bodyHtml: string; version: number }
 export interface SendEmail { toAddress: string; ccAddress?: string; subject: string; bodyHtml: string; replyToEmailId?: string; businessPartnerId?: string; orderId?: string }

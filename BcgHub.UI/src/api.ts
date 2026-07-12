@@ -1,4 +1,4 @@
-import type { AttachmentItem, CommentItem, Communication, ComplaintDetail, ComplaintListItem, ContactPerson, CreatedManagedUser, CurrentUser, EmailMessage, EmailOrderOptions, EmailSettings, EmailTemplate, ManagedUser, ManagedUserInput, OrderDetail, OrderListItem, PagedResult, PartnerDetail, PartnerListItem, PartnerType, ResourceOwnerType, SaveComplaint, SaveEmailSettings, SendEmail, SaveOrder, SavePartner, TransportQuote, WorkflowStep, WorkflowStepStatus } from "./domain";
+import type { AttachmentItem, CommentItem, Communication, ComplaintDetail, ComplaintListItem, ContactPerson, CreatedManagedUser, CurrentUser, EmailActionContext, EmailMessage, EmailOrderOptions, EmailSettings, EmailTemplate, EmailTransportQuoteContext, ManagedUser, ManagedUserInput, OrderDetail, OrderListItem, PagedResult, PartnerDetail, PartnerListItem, PartnerType, ResourceOwnerType, SaveComplaint, SaveEmailSettings, SendEmail, SaveOrder, SavePartner, TransportQuote, WorkflowStep, WorkflowStepStatus } from "./domain";
 
 const apiRoot = "https://dev.radixal.net/bcg-hub/api";
 let csrfTokenPromise: Promise<string> | undefined;
@@ -73,6 +73,7 @@ export const api = {
   resources: {
     comments: (ownerType: ResourceOwnerType, ownerId: string) => request<CommentItem[]>(`/resources/${ownerType}/${ownerId}/comments`),
     addComment: (ownerType: ResourceOwnerType, ownerId: string, text: string) => request<CommentItem>(`/resources/${ownerType}/${ownerId}/comments`, { method: "POST", body: JSON.stringify({ text, version: 0 }) }),
+    updateComment: (comment: CommentItem, text: string) => request<CommentItem>(`/resources/comments/${comment.id}`, { method: "PUT", body: JSON.stringify({ text, version: comment.version }) }),
     removeComment: (id: string, version: number) => request<void>(`/resources/comments/${id}?version=${version}`, { method: "DELETE" }),
     attachments: (ownerType: ResourceOwnerType, ownerId: string) => request<AttachmentItem[]>(`/resources/${ownerType}/${ownerId}/attachments`),
     upload: (ownerType: ResourceOwnerType, ownerId: string, file: File) => { const body = new FormData(); body.append("file", file); return request<AttachmentItem>(`/resources/${ownerType}/${ownerId}/attachments`, { method: "POST", body }); },
@@ -87,7 +88,10 @@ export const api = {
   emails: {
     list: (search: string, signal?: AbortSignal) => request<PagedResult<EmailMessage>>(`/emails?q=${encodeURIComponent(search)}&page=1&pageSize=50`, { signal }),
     detail: (id: string, signal?: AbortSignal) => request<EmailMessage>(`/emails/${id}`, { signal }),
+    actionContext: (id: string, signal?: AbortSignal) => request<EmailActionContext>(`/emails/${id}/action-context`, { signal }),
     orderOptions: (id: string, signal?: AbortSignal) => request<EmailOrderOptions>(`/emails/${id}/order-options`, { signal }),
+    transportQuoteContext: (id: string, signal?: AbortSignal) => request<EmailTransportQuoteContext>(`/emails/${id}/transport-quote`, { signal }),
+    createTransportQuote: (id: string, value: object) => request<TransportQuote>(`/emails/${id}/transport-quote`, { method: "POST", body: JSON.stringify(value) }),
     sync: () => request<{ importedCount: number }>("/emails/sync", { method: "POST" }),
     link: (email: EmailMessage, businessPartnerId?: string, orderId?: string) => request<EmailMessage>(`/emails/${email.id}/link`, { method: "PUT", body: JSON.stringify({ businessPartnerId: businessPartnerId || null, orderId: orderId || null, version: email.version }) }),
     send: (value: SendEmail) => request<EmailMessage>("/emails/send", { method: "POST", body: JSON.stringify(value) })

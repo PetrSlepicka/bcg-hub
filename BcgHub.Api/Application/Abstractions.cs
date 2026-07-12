@@ -103,11 +103,18 @@ public interface IEmailProcessor
 {
     Task ProcessAsync(EmailMessage email, CancellationToken cancellationToken);
     Task<EmailOrderOptionsDto> GetOrderOptionsAsync(EmailMessage email, CancellationToken cancellationToken);
+    Task<EmailActionContextDto> GetActionContextAsync(EmailMessage email, CancellationToken cancellationToken);
 }
 
 public interface IEmailSender
 {
     Task<EmailMessageDto> SendAsync(SendEmailRequest request, CancellationToken cancellationToken);
+}
+
+public interface IEmailTransportQuoteService
+{
+    Task<EmailTransportQuoteContextDto?> GetContextAsync(Guid emailId, CancellationToken cancellationToken);
+    Task<TransportQuoteDto?> CreateAsync(Guid emailId, CreateEmailTransportQuoteRequest request, CancellationToken cancellationToken);
 }
 
 public interface IEmailTemplateService

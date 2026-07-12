@@ -52,6 +52,7 @@ builder.Services.AddScoped<IEmailSettingsService>(services => services.GetRequir
 builder.Services.AddScoped<IEmailQueryService, EmailQueryService>();
 builder.Services.AddScoped<IEmailCommandService, EmailCommandService>();
 builder.Services.AddScoped<IEmailProcessor, EmailProcessor>();
+builder.Services.AddScoped<IEmailTransportQuoteService, EmailTransportQuoteService>();
 builder.Services.AddScoped<IEmailSender, EmailSender>();
 builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>();
 builder.Services.AddScoped<EmailSyncService>();
