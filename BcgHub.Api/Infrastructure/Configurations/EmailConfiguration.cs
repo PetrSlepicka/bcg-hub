@@ -16,6 +16,9 @@ public sealed class EmailConfiguration : IEntityTypeConfiguration<EmailAccountSe
         entity.Property(x => x.ProtectedSmtpPassword).HasMaxLength(4000).IsRequired();
         entity.Property(x => x.SenderAddress).HasMaxLength(320).IsRequired();
         entity.Property(x => x.SenderName).HasMaxLength(300);
+        entity.Property(x => x.MicrosoftMailboxAddress).HasMaxLength(320);
+        entity.Property(x => x.ProtectedMicrosoftRefreshToken).HasMaxLength(8000);
+        entity.Property(x => x.MicrosoftDeltaLink).HasMaxLength(8000);
         entity.HasIndex(x => x.UserAccountId).IsUnique();
         entity.HasOne(x => x.UserAccount).WithMany().HasForeignKey(x => x.UserAccountId).OnDelete(DeleteBehavior.Cascade);
     }

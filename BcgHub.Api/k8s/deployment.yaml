@@ -65,6 +65,20 @@ spec:
                 secretKeyRef:
                   name: bcg-hub-secrets
                   key: GoogleDriveRootFolderId
+            - name: MicrosoftGraph__TenantId
+              value: "organizations"
+            - name: MicrosoftGraph__ClientId
+              valueFrom:
+                secretKeyRef:
+                  name: bcg-hub-secrets
+                  key: MicrosoftGraphClientId
+                  optional: true
+            - name: MicrosoftGraph__ClientSecret
+              valueFrom:
+                secretKeyRef:
+                  name: bcg-hub-secrets
+                  key: MicrosoftGraphClientSecret
+                  optional: true
           volumeMounts:
             - name: data-protection-keys
               mountPath: /var/bcg-hub/keys

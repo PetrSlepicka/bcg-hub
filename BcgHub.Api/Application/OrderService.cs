@@ -5,7 +5,7 @@ namespace BcgHub.Api.Application;
 
 public sealed class OrderQueryService(IOrderReadRepository repository) : IOrderQueryService
 {
-    public Task<PagedResult<OrderListItem>> GetListAsync(string? search, string sortBy, bool descending, int page, int pageSize, CancellationToken cancellationToken) => repository.GetListAsync(search, sortBy, descending, Math.Max(1, page), Math.Clamp(pageSize, 1, 100), cancellationToken);
+    public Task<PagedResult<OrderListItem>> GetListAsync(string? search, string sortBy, bool descending, int page, int pageSize, Guid? customerId, CancellationToken cancellationToken) => repository.GetListAsync(search, sortBy, descending, Math.Max(1, page), Math.Clamp(pageSize, 1, 100), customerId, cancellationToken);
     public Task<OrderDetailDto?> GetDetailAsync(Guid id, CancellationToken cancellationToken) => repository.GetDetailAsync(id, cancellationToken);
 }
 

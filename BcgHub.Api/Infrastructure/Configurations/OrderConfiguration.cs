@@ -10,12 +10,14 @@ public sealed class OrderConfiguration : IEntityTypeConfiguration<Order>, IEntit
     {
         entity.Property(x => x.Number).HasMaxLength(50).IsRequired();
         entity.Property(x => x.PohodaOrderNumber).HasMaxLength(50);
+        entity.Property(x => x.PohodaOrderId).HasMaxLength(200);
         entity.Property(x => x.Title).HasMaxLength(300).IsRequired();
         entity.Property(x => x.WarehouseInstructions).HasMaxLength(10000);
         entity.Property(x => x.ValueCzk).HasPrecision(18, 2);
         entity.Property(x => x.WeightKg).HasPrecision(18, 3);
         entity.Property(x => x.VolumeM3).HasPrecision(18, 3);
         entity.HasIndex(x => x.Number).IsUnique();
+        entity.HasIndex(x => x.PohodaOrderId).IsUnique().HasFilter("\"PohodaOrderId\" IS NOT NULL");
         entity.HasIndex(x => new { x.Status, x.PlannedDeliveryOn });
         entity.ToTable(table => table.HasCheckConstraint("CK_Orders_NonNegativeValues", "\"ValueCzk\" >= 0 AND \"WeightKg\" >= 0 AND \"VolumeM3\" >= 0"));
         entity.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);

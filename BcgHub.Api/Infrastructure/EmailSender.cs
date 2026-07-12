@@ -8,11 +8,12 @@ using MimeKit.Utils;
 
 namespace BcgHub.Api.Infrastructure;
 
-public sealed class EmailSender(BcgHubDbContext db, CurrentUserAccessor currentUser, EmailSettingsService settingsService) : IEmailSender
+public sealed class EmailSender(BcgHubDbContext db, CurrentUserAccessor currentUser, EmailSettingsService settingsService, IMicrosoftGraphMailService microsoftGraph) : IEmailSender
 {
     public async Task<EmailMessageDto> SendAsync(SendEmailRequest request, CancellationToken cancellationToken)
     {
         var settings = await db.EmailAccountSettings.SingleOrDefaultAsync(x => x.UserAccountId == currentUser.UserId && x.IsActive, cancellationToken) ?? throw new DomainValidationException("Nejdříve nastavte aktivní e-mailovou schránku.");
+        if (settings.Provider == EmailProvider.MicrosoftGraph) return await microsoftGraph.SendAsync(settings, request, cancellationToken);
         var replyTo = request.ReplyToEmailId.HasValue ? await db.EmailMessages.SingleOrDefaultAsync(x => x.Id == request.ReplyToEmailId && x.UserAccountId == currentUser.UserId, cancellationToken) : null;
         if (request.ReplyToEmailId.HasValue && replyTo is null) throw new DomainValidationException("Původní e-mail nebyl nalezen.");
 

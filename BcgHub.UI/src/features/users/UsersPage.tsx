@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
-import { Copy, Pencil, Plus, Trash2, UserRound } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Copy, Pencil, Plus, Search, Trash2, UserRound } from "lucide-react";
 import { ApiError, api } from "../../api";
 import type { CreatedManagedUser, ManagedUser, ManagedUserInput } from "../../domain";
+import { SortableHeader } from "../../shared/SortableHeader";
 
 export function UsersPage() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
@@ -10,6 +11,9 @@ export function UsersPage() {
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<ManagedUser | null | undefined>(undefined);
   const [created, setCreated] = useState<CreatedManagedUser>();
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"name" | "email" | "created" | "status">("name");
+  const [descending, setDescending] = useState(false);
 
   const load = async (signal?: AbortSignal) => { setError(""); try { setUsers(await api.users.list(signal)); } catch (caught) { if ((caught as Error).name !== "AbortError") setError(messageOf(caught)); } finally { setLoading(false); } };
   useEffect(() => { const controller = new AbortController(); void load(controller.signal); return () => controller.abort(); }, []);
@@ -35,18 +39,21 @@ export function UsersPage() {
     try { await api.users.deactivate(user.id); await load(); } catch (caught) { setError(messageOf(caught)); } finally { setSaving(false); }
   };
 
+  const visibleUsers = useMemo(() => { const query = search.trim().toLocaleLowerCase("cs"); const filtered = query ? users.filter(user => [user.fullName, user.email, user.isActive ? "aktivní" : "neaktivní"].some(value => value.toLocaleLowerCase("cs").includes(query))) : users; const value = (user: ManagedUser) => ({ name: user.fullName, email: user.email, created: user.createdAtUtc, status: user.isActive ? "1" : "0" })[sortBy]; return [...filtered].sort((left, right) => value(left).localeCompare(value(right), "cs", { sensitivity: "base" }) * (descending ? -1 : 1)); }, [users, search, sortBy, descending]);
+  const sort = (key: typeof sortBy) => { if (sortBy === key) setDescending(value => !value); else { setSortBy(key); setDescending(false); } };
+
   return <section className="users-page">
     <header className="users-header"><div><p className="eyebrow">ADMINISTRACE</p><h1>Správa uživatelů</h1><span>{users.filter(user => user.isActive).length} aktivních uživatelů</span></div><button className="primary" type="button" onClick={() => setEditing(null)}><Plus size={16} /> Přidat uživatele</button></header>
     {error && <div className="error-banner users-error">{error}</div>}
+    <div className="toolbar users-toolbar"><label className="search"><Search size={16} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Hledat podle jména, e-mailu nebo stavu…" /></label></div>
     <div className="users-table" aria-busy={loading || saving}>
-      <div className="users-row users-table-head"><span>Uživatel</span><span>E-mail</span><span>Vytvořen</span><span>Stav</span><span></span></div>
-      {users.map(user => <div className={`users-row ${user.isActive ? "" : "inactive"}`} key={user.id}>
-        <div className="users-name"><span className="users-avatar"><UserRound size={16} /></span><div><b>{user.fullName}</b>{user.isCurrentUser && <small>Váš účet</small>}</div></div>
-        <span className="users-email">{user.email}</span><span>{formatDate(user.createdAtUtc)}</span>
-        <label className="users-toggle"><input type="checkbox" checked={user.isActive} disabled={saving || user.isCurrentUser} onChange={event => void setActive(user, event.target.checked)} /><span>{user.isActive ? "Aktivní" : "Neaktivní"}</span></label>
-        <div className="users-actions"><button type="button" title="Upravit uživatele" disabled={saving} onClick={() => setEditing(user)}><Pencil size={15} /></button><button className="danger" type="button" title="Deaktivovat uživatele" disabled={saving || user.isCurrentUser || !user.isActive} onClick={() => void deactivate(user)}><Trash2 size={15} /></button></div>
-      </div>)}
-      {!users.length && <div className="users-empty">{loading ? "Načítám uživatele…" : "Žádní uživatelé."}</div>}
+      <table className="data-table users-data-table"><thead><tr><SortableHeader label="Uživatel" active={sortBy === "name"} descending={descending} onSort={() => sort("name")} /><SortableHeader label="E-mail" active={sortBy === "email"} descending={descending} onSort={() => sort("email")} /><SortableHeader label="Vytvořen" active={sortBy === "created"} descending={descending} onSort={() => sort("created")} /><SortableHeader label="Stav" active={sortBy === "status"} descending={descending} onSort={() => sort("status")} /><th className="actions">Akce</th></tr></thead><tbody>{visibleUsers.map(user => <tr className={user.isActive ? "" : "inactive"} key={user.id}>
+        <td><div className="users-name"><span className="users-avatar"><UserRound size={16} /></span><div><b>{user.fullName}</b>{user.isCurrentUser && <small>Váš účet</small>}</div></div></td>
+        <td className="users-email">{user.email}</td><td>{formatDate(user.createdAtUtc)}</td>
+        <td><label className="users-toggle"><input type="checkbox" checked={user.isActive} disabled={saving || user.isCurrentUser} onChange={event => void setActive(user, event.target.checked)} /><span>{user.isActive ? "Aktivní" : "Neaktivní"}</span></label></td>
+        <td className="users-actions actions"><button type="button" title="Upravit uživatele" disabled={saving} onClick={() => setEditing(user)}><Pencil size={15} /></button><button className="danger" type="button" title="Deaktivovat uživatele" disabled={saving || user.isCurrentUser || !user.isActive} onClick={() => void deactivate(user)}><Trash2 size={15} /></button></td>
+      </tr>)}</tbody></table>
+      {!visibleUsers.length && <div className="users-empty">{loading ? "Načítám uživatele…" : search ? "Žádní odpovídající uživatelé." : "Žádní uživatelé."}</div>}
     </div>
     {editing !== undefined && <UserModal user={editing} saving={saving} onClose={() => setEditing(undefined)} onSave={save} />}
     {created && <CredentialsModal created={created} onClose={() => setCreated(undefined)} />}

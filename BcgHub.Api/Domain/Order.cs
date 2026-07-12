@@ -15,6 +15,7 @@ public sealed class Order : Entity
 {
     public string Number { get; set; } = "";
     public string? PohodaOrderNumber { get; set; }
+    public string? PohodaOrderId { get; set; }
     public string Title { get; set; } = "";
     public OrderStatus Status { get; set; } = OrderStatus.New;
     public Guid CustomerId { get; set; }

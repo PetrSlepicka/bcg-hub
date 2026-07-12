@@ -6,7 +6,7 @@ public sealed record OrderReferenceValidation(bool CustomerIsValid, bool Contact
 
 public interface IOrderReadRepository
 {
-    Task<PagedResult<OrderListItem>> GetListAsync(string? search, string sortBy, bool descending, int page, int pageSize, CancellationToken cancellationToken);
+    Task<PagedResult<OrderListItem>> GetListAsync(string? search, string sortBy, bool descending, int page, int pageSize, Guid? customerId, CancellationToken cancellationToken);
     Task<OrderDetailDto?> GetDetailAsync(Guid id, CancellationToken cancellationToken);
 }
 
@@ -31,7 +31,7 @@ public interface IOrderWriteRepository
 
 public interface IOrderQueryService
 {
-    Task<PagedResult<OrderListItem>> GetListAsync(string? search, string sortBy, bool descending, int page, int pageSize, CancellationToken cancellationToken);
+    Task<PagedResult<OrderListItem>> GetListAsync(string? search, string sortBy, bool descending, int page, int pageSize, Guid? customerId, CancellationToken cancellationToken);
     Task<OrderDetailDto?> GetDetailAsync(Guid id, CancellationToken cancellationToken);
 }
 
@@ -44,6 +44,22 @@ public interface IOrderCommandService
     Task<TransportQuoteDto?> AddQuoteAsync(Guid orderId, SaveTransportQuoteRequest request, CancellationToken cancellationToken);
     Task<TransportQuoteDto?> UpdateQuoteAsync(Guid orderId, Guid quoteId, SaveTransportQuoteRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteQuoteAsync(Guid orderId, Guid quoteId, uint version, CancellationToken cancellationToken);
+}
+
+public interface IPohodaImportRepository
+{
+    Task<IReadOnlyDictionary<string, Guid>> FindCustomersAsync(IEnumerable<PohodaCustomerData> customers, CancellationToken cancellationToken);
+    Task<IReadOnlySet<string>> FindExistingPohodaOrderIdsAsync(IEnumerable<string> externalIds, CancellationToken cancellationToken);
+    Task<int> GetNextOrderSequenceAsync(int year, CancellationToken cancellationToken);
+    void AddImportedCustomer(BusinessPartner customer);
+    void AddImportedOrder(Order order);
+    Task SaveImportAsync(CancellationToken cancellationToken);
+}
+
+public interface IPohodaOrderImportService
+{
+    Task<PohodaImportPreview> PreviewAsync(Stream xml, CancellationToken cancellationToken);
+    Task<PohodaImportResult> ImportAsync(Stream xml, CancellationToken cancellationToken);
 }
 
 public interface IPartnerService
@@ -80,6 +96,20 @@ public interface IEmailSettingsService
 {
     Task<EmailSettingsDto?> GetAsync(CancellationToken cancellationToken);
     Task<EmailSettingsDto> SaveAsync(SaveEmailSettingsRequest request, CancellationToken cancellationToken);
+    Task<EmailSettingsDto> SetProviderAsync(string provider, CancellationToken cancellationToken);
+}
+
+public interface IMicrosoftGraphConnectionService
+{
+    string CreateAuthorizationUrl(string redirectUri, string returnUrl);
+    Task<string> CompleteAuthorizationAsync(string code, string state, string redirectUri, CancellationToken cancellationToken);
+    Task DisconnectAsync(CancellationToken cancellationToken);
+}
+
+public interface IMicrosoftGraphMailService
+{
+    Task<int> SyncAsync(EmailAccountSettings settings, CancellationToken cancellationToken);
+    Task<EmailMessageDto> SendAsync(EmailAccountSettings settings, SendEmailRequest request, CancellationToken cancellationToken);
 }
 
 public interface IEmailQueryService
@@ -106,9 +136,23 @@ public interface IEmailProcessor
     Task<EmailActionContextDto> GetActionContextAsync(EmailMessage email, CancellationToken cancellationToken);
 }
 
+public enum EmailSenderMatchKind { None, Address, Domain, Ambiguous }
+public sealed record EmailSenderMatch(BusinessPartner? Partner, EmailSenderMatchKind Kind);
+
+public interface IEmailSenderResolver
+{
+    Task<EmailSenderMatch> ResolveAsync(string address, CancellationToken cancellationToken);
+}
+
 public interface IEmailSender
 {
     Task<EmailMessageDto> SendAsync(SendEmailRequest request, CancellationToken cancellationToken);
+}
+
+public interface ITransportInquiryService
+{
+    Task<TransportInquiryContextDto?> GetContextAsync(Guid orderId, string transportType, CancellationToken cancellationToken);
+    Task<SendTransportInquiryResult?> SendAsync(Guid orderId, SendTransportInquiryRequest request, CancellationToken cancellationToken);
 }
 
 public interface IEmailTransportQuoteService

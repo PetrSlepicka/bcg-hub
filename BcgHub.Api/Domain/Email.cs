@@ -1,11 +1,13 @@
 namespace BcgHub.Api.Domain;
 
 public enum EmailDirection { Inbound, Outbound }
+public enum EmailProvider { ImapSmtp, MicrosoftGraph }
 
 public sealed class EmailAccountSettings : Entity
 {
     public Guid UserAccountId { get; set; }
     public UserAccount UserAccount { get; set; } = null!;
+    public EmailProvider Provider { get; set; } = EmailProvider.ImapSmtp;
     public string ImapServer { get; set; } = "";
     public int ImapPort { get; set; } = 993;
     public bool ImapUseSsl { get; set; } = true;
@@ -18,6 +20,9 @@ public sealed class EmailAccountSettings : Entity
     public string ProtectedSmtpPassword { get; set; } = "";
     public string SenderAddress { get; set; } = "";
     public string? SenderName { get; set; }
+    public string? MicrosoftMailboxAddress { get; set; }
+    public string? ProtectedMicrosoftRefreshToken { get; set; }
+    public string? MicrosoftDeltaLink { get; set; }
     public bool IsActive { get; set; } = true;
 }
 

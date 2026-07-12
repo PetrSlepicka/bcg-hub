@@ -14,11 +14,16 @@ export interface OrderListItem {
   weightKg: number;
   completedSteps: number;
   totalSteps: number;
+  orderedOn?: string;
+  carrierName?: string;
 }
 
 export interface PartnerReference { id: string; name: string }
 export interface WorkflowStep { id: string; type: string; title: string; description: string; status: WorkflowStepStatus; dueAtUtc?: string; completedAtUtc?: string; notes?: string; version: number }
 export interface TransportQuote { id: string; carrier: PartnerReference; price: number; currency: string; pickupOn?: string; deliveryOn?: string; isSelected: boolean; notes?: string; version: number }
+export type TransportType = "Road" | "Sea" | "Air";
+export interface TransportInquiryCarrier { id: string; name: string; email: string }
+export interface TransportInquiryContext { orderNumber: string; carriers: TransportInquiryCarrier[] }
 
 export interface OrderDetail {
   id: string;
@@ -58,17 +63,22 @@ export interface CommentItem { id: string; authorName: string; text: string; cre
 export interface AttachmentItem { id: string; fileName: string; contentType: string; size: number; createdAtUtc: string; version: number }
 export interface Communication { id: string; type: "Email" | "Phone" | "Meeting" | "Note"; businessPartnerId?: string; orderId?: string; subject: string; bodyPreview?: string; sender?: string; recipients?: string; occurredAtUtc: string; version: number }
 export interface PagedResult<T> { items: T[]; page: number; pageSize: number; totalCount: number }
+export type PohodaImportRowStatus = "New" | "Duplicate" | "Error";
+export interface PohodaImportRow { externalId: string; pohodaOrderNumber?: string; title: string; customerName: string; companyNumber?: string; orderedOn?: string; requestedDeliveryOn?: string; valueCzk: number; status: PohodaImportRowStatus; message?: string }
+export interface PohodaImportPreview { rows: PohodaImportRow[]; newCount: number; duplicateCount: number; errorCount: number }
+export interface PohodaImportResult { importedCount: number; duplicateCount: number; errorCount: number }
 export interface CurrentUser { id: string; email: string; fullName: string }
 export interface ManagedUser { id: string; fullName: string; email: string; isActive: boolean; createdAtUtc: string; updatedAtUtc: string; isCurrentUser: boolean }
 export interface CreatedManagedUser { user: ManagedUser; temporaryPassword: string }
 export interface ManagedUserInput { fullName: string; email: string; isActive?: boolean; password?: string }
-export interface EmailSettings { imapServer: string; imapPort: number; imapUseSsl: boolean; imapUsername: string; hasImapPassword: boolean; smtpServer: string; smtpPort: number; smtpUseSsl: boolean; smtpUsername: string; hasSmtpPassword: boolean; senderAddress: string; senderName?: string; isActive: boolean }
+export type EmailProvider = "ImapSmtp" | "MicrosoftGraph";
+export interface EmailSettings { provider: EmailProvider; imapServer: string; imapPort: number; imapUseSsl: boolean; imapUsername: string; hasImapPassword: boolean; smtpServer: string; smtpPort: number; smtpUseSsl: boolean; smtpUsername: string; hasSmtpPassword: boolean; senderAddress: string; senderName?: string; isActive: boolean; isMicrosoftConnected: boolean; microsoftMailboxAddress?: string }
 export interface SaveEmailSettings { imapServer: string; imapPort: number; imapUseSsl: boolean; imapUsername: string; imapPassword: string; smtpServer: string; smtpPort: number; smtpUseSsl: boolean; smtpUsername: string; smtpPassword: string; senderAddress: string; senderName?: string; isActive: boolean }
 export interface EmailMessage { id: string; direction: "Inbound" | "Outbound"; fromAddress: string; fromName?: string; toAddress: string; subject: string; bodyText?: string; bodyHtml?: string; occurredAtUtc: string; isRead: boolean; hasAttachments: boolean; businessPartnerId?: string; businessPartnerName?: string; orderId?: string; orderNumber?: string; version: number }
 export interface EmailTransportQuoteContext { carrier: PartnerReference; suggestedOrderId?: string; orders: EmailOrderOption[] }
 export interface EmailOrderOption { id: string; number: string; title: string; customerName: string }
 export interface EmailOrderOptions { suggested: EmailOrderOption[]; other: EmailOrderOption[] }
 export type EmailSenderType = "Carrier" | "Warehouse" | "Collaborator" | "Customer" | "Partner" | "Unknown";
-export interface EmailActionContext { senderType: EmailSenderType; matchedBy: "Address" | "Domain" | "None"; partner?: PartnerReference }
+export interface EmailActionContext { senderType: EmailSenderType; matchedBy: "Address" | "Domain" | "Manual" | "None" | "Ambiguous"; partner?: PartnerReference }
 export interface EmailTemplate { id: string; name: string; subject: string; bodyHtml: string; version: number }
 export interface SendEmail { toAddress: string; ccAddress?: string; subject: string; bodyHtml: string; replyToEmailId?: string; businessPartnerId?: string; orderId?: string }

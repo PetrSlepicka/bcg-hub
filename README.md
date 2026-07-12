@@ -52,6 +52,16 @@ pnpm dev
 
 API při startu aplikuje EF migrace a volitelně vytvoří bootstrap účet. Přihlašovací cookie je `HttpOnly` a změnové endpointy vyžadují antiforgery token. Heslo k IMAP schránce se ukládá šifrovaně pomocí ASP.NET Data Protection.
 
+### Microsoft 365 / Exchange Online
+
+V Microsoft Entra ID zaregistrujte webovou aplikaci a přidejte delegated permissions `User.Read`, `Mail.Read` a `Mail.Send`. Redirect URI pro nasazené API je:
+
+```text
+https://dev.radixal.net/bcg-hub/api/settings/email/microsoft/callback
+```
+
+Do konfigurace API přidejte `MicrosoftGraph__ClientId`, `MicrosoftGraph__ClientSecret` a případně `MicrosoftGraph__TenantId` (výchozí hodnota je `organizations`). V Kubernetes se Client ID a Client Secret čtou z klíčů `MicrosoftGraphClientId` a `MicrosoftGraphClientSecret` v secretu `bcg-hub-secrets`. Refresh token uživatele je uložen šifrovaně pomocí stejného perzistentního Data Protection key ringu jako ostatní citlivá nastavení.
+
 Frontend ve všech prostředích komunikuje výhradně se serverovou API na `https://dev.radixal.net/bcg-hub/api`.
 
 ## Ověření

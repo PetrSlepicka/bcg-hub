@@ -10,8 +10,7 @@ public sealed class CommunicationService(BcgHubDbContext db, CurrentUserAccessor
     {
         if (!partnerId.HasValue && !orderId.HasValue) throw new DomainValidationException("Je nutné vybrat partnera nebo zakázku.");
         page = Math.Max(1, page); pageSize = Math.Clamp(pageSize, 1, 100);
-        var resolvedPartnerId = partnerId ?? await db.Orders.AsNoTracking().Where(x => x.Id == orderId).Select(x => (Guid?)x.CustomerId).SingleOrDefaultAsync(cancellationToken);
-        var addresses = resolvedPartnerId.HasValue ? await GetPartnerAddressesAsync(resolvedPartnerId.Value, cancellationToken) : [];
+        var addresses = partnerId.HasValue && !orderId.HasValue ? await GetPartnerAddressesAsync(partnerId.Value, cancellationToken) : [];
         var communications = await db.Communications.AsNoTracking().Where(x => (!partnerId.HasValue || x.BusinessPartnerId == partnerId) && (!orderId.HasValue || x.OrderId == orderId)).Select(x => new CommunicationDto(x.Id, x.Type, x.BusinessPartnerId, x.OrderId, x.Subject, x.BodyPreview, x.Sender, x.Recipients, x.OccurredAtUtc, x.Version)).ToListAsync(cancellationToken);
         var emailQuery = db.EmailMessages.AsNoTracking().Where(x => x.UserAccountId == currentUser.UserId && ((!partnerId.HasValue || x.BusinessPartnerId == partnerId) && (!orderId.HasValue || x.OrderId == orderId)));
         foreach (var address in addresses) emailQuery = emailQuery.Union(db.EmailMessages.AsNoTracking().Where(x => x.UserAccountId == currentUser.UserId && (x.FromAddress.ToLower() == address || x.ToAddress.ToLower().Contains(address) || (x.CcAddress != null && x.CcAddress.ToLower().Contains(address)))));

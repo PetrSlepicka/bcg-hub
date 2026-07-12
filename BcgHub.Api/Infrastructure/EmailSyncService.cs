@@ -8,7 +8,7 @@ using MimeKit;
 
 namespace BcgHub.Api.Infrastructure;
 
-public sealed class EmailSyncService(BcgHubDbContext db, CurrentUserAccessor currentUser, EmailSettingsService settingsService, IEmailSyncLock syncLock, IFileStorage fileStorage, IEmailProcessor emailProcessor) : IEmailSyncService
+public sealed class EmailSyncService(BcgHubDbContext db, CurrentUserAccessor currentUser, EmailSettingsService settingsService, IEmailSyncLock syncLock, IFileStorage fileStorage, IEmailProcessor emailProcessor, IMicrosoftGraphMailService microsoftGraph) : IEmailSyncService
 {
     public async Task<int> SyncAsync(CancellationToken cancellationToken)
     {
@@ -19,6 +19,7 @@ public sealed class EmailSyncService(BcgHubDbContext db, CurrentUserAccessor cur
     {
         await using var lease = await syncLock.AcquireAsync(userId, cancellationToken);
         var settings = await db.EmailAccountSettings.SingleOrDefaultAsync(x => x.UserAccountId == userId && x.IsActive, cancellationToken) ?? throw new DomainValidationException("Nejdříve nastavte aktivní e-mailovou schránku.");
+        if (settings.Provider == EmailProvider.MicrosoftGraph) return await microsoftGraph.SyncAsync(settings, cancellationToken);
         using var client = new ImapClient();
         await client.ConnectAsync(settings.ImapServer, settings.ImapPort, settings.ImapUseSsl, cancellationToken);
         await client.AuthenticateAsync(settings.ImapUsername, settingsService.Unprotect(settings), cancellationToken);

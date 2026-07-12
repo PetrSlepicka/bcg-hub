@@ -12,7 +12,7 @@ public sealed class PartnerService(BcgHubDbContext db) : IPartnerService
         pageSize = Math.Clamp(pageSize, 1, 100);
         var query = db.BusinessPartners.AsNoTracking();
         if (type is not null) query = query.Where(x => x.Type == type);
-        if (!string.IsNullOrWhiteSpace(search)) query = query.Where(x => EF.Functions.ILike(x.Name, $"%{EscapeLike(search.Trim())}%", "\\"));
+        if (!string.IsNullOrWhiteSpace(search)) { var pattern = $"%{EscapeLike(search.Trim())}%"; query = query.Where(x => EF.Functions.ILike(x.Name, pattern, "\\") || x.Email != null && EF.Functions.ILike(x.Email, pattern, "\\") || x.CompanyNumber != null && EF.Functions.ILike(x.CompanyNumber, pattern, "\\") || x.Contacts.Any(contact => EF.Functions.ILike(contact.FullName, pattern, "\\") || contact.Email != null && EF.Functions.ILike(contact.Email, pattern, "\\"))); }
         var totalCount = await query.CountAsync(cancellationToken);
         var items = await query.OrderBy(x => x.Name).ThenBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize).Select(x => new PartnerListItem(x.Id, x.Type, x.Name, x.City, x.CountryCode, x.Email, x.Phone, x.Contacts.Count)).ToListAsync(cancellationToken);
         return new PagedResult<PartnerListItem>(items, page, pageSize, totalCount);
@@ -24,6 +24,7 @@ public sealed class PartnerService(BcgHubDbContext db) : IPartnerService
     {
         var partner = new BusinessPartner();
         Apply(partner, request);
+        PartnerPrimaryContactSynchronizer.Synchronize(partner);
         db.BusinessPartners.Add(partner);
         await db.SaveChangesAsync(cancellationToken);
         return Map(partner)!;
@@ -35,6 +36,7 @@ public sealed class PartnerService(BcgHubDbContext db) : IPartnerService
         if (partner is null) return null;
         db.Entry(partner).Property(x => x.Version).OriginalValue = request.Version;
         Apply(partner, request);
+        PartnerPrimaryContactSynchronizer.Synchronize(partner);
         await SaveAsync(cancellationToken);
         return Map(partner);
     }

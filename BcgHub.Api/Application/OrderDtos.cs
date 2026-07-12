@@ -3,7 +3,7 @@ using BcgHub.Api.Domain;
 
 namespace BcgHub.Api.Application;
 
-public sealed record OrderListItem(Guid Id, string Number, string Title, string CustomerName, OrderStatus Status, DateOnly? PlannedDeliveryOn, decimal ValueCzk, decimal WeightKg, int CompletedSteps, int TotalSteps);
+public sealed record OrderListItem(Guid Id, string Number, string Title, string CustomerName, OrderStatus Status, DateOnly? PlannedDeliveryOn, decimal ValueCzk, decimal WeightKg, int CompletedSteps, int TotalSteps, DateOnly? OrderedOn, string? CarrierName);
 public sealed record PartnerReference(Guid Id, string Name);
 public sealed record WorkflowStepDto(Guid Id, WorkflowStepType Type, string Title, string Description, WorkflowStepStatus Status, DateTime? DueAtUtc, DateTime? CompletedAtUtc, string? Notes, uint Version);
 public sealed record TransportQuoteDto(Guid Id, PartnerReference Carrier, decimal Price, string Currency, DateOnly? PickupOn, DateOnly? DeliveryOn, bool IsSelected, string? Notes, uint Version);

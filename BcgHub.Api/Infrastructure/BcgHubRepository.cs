@@ -5,11 +5,12 @@ using Npgsql;
 
 namespace BcgHub.Api.Infrastructure;
 
-public sealed class BcgHubRepository(BcgHubDbContext db) : IOrderReadRepository, IOrderWriteRepository
+public sealed class BcgHubRepository(BcgHubDbContext db) : IOrderReadRepository, IOrderWriteRepository, IPohodaImportRepository
 {
-    public async Task<PagedResult<OrderListItem>> GetListAsync(string? search, string sortBy, bool descending, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<PagedResult<OrderListItem>> GetListAsync(string? search, string sortBy, bool descending, int page, int pageSize, Guid? customerId, CancellationToken cancellationToken)
     {
         var query = db.Orders.AsNoTracking();
+        if (customerId.HasValue) query = query.Where(x => x.CustomerId == customerId.Value);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var pattern = $"%{EscapeLike(search.Trim())}%";
@@ -20,6 +21,12 @@ public sealed class BcgHubRepository(BcgHubDbContext db) : IOrderReadRepository,
         {
             ("customer", false) => query.OrderBy(x => x.Customer.Name).ThenBy(x => x.Id),
             ("customer", true) => query.OrderByDescending(x => x.Customer.Name).ThenBy(x => x.Id),
+            ("title", false) => query.OrderBy(x => x.Title).ThenBy(x => x.Id),
+            ("title", true) => query.OrderByDescending(x => x.Title).ThenBy(x => x.Id),
+            ("received", false) => query.OrderBy(x => x.OrderedOn).ThenBy(x => x.Id),
+            ("received", true) => query.OrderByDescending(x => x.OrderedOn).ThenBy(x => x.Id),
+            ("carrier", false) => query.OrderBy(x => x.Carrier != null ? x.Carrier.Name : null).ThenBy(x => x.Id),
+            ("carrier", true) => query.OrderByDescending(x => x.Carrier != null ? x.Carrier.Name : null).ThenBy(x => x.Id),
             ("delivery", false) => query.OrderBy(x => x.PlannedDeliveryOn).ThenBy(x => x.Id),
             ("delivery", true) => query.OrderByDescending(x => x.PlannedDeliveryOn).ThenBy(x => x.Id),
             ("value", false) => query.OrderBy(x => x.ValueCzk).ThenBy(x => x.Id),
@@ -29,7 +36,7 @@ public sealed class BcgHubRepository(BcgHubDbContext db) : IOrderReadRepository,
         };
 
         var totalCount = await query.CountAsync(cancellationToken);
-        var items = await query.Skip((page - 1) * pageSize).Take(pageSize).Select(x => new OrderListItem(x.Id, x.Number, x.Title, x.Customer.Name, x.Status, x.PlannedDeliveryOn, x.ValueCzk, x.WeightKg, x.WorkflowSteps.Count(s => s.Status == WorkflowStepStatus.Completed || s.Status == WorkflowStepStatus.NotRequired), x.WorkflowSteps.Count)).ToListAsync(cancellationToken);
+        var items = await query.Skip((page - 1) * pageSize).Take(pageSize).Select(x => new OrderListItem(x.Id, x.Number, x.Title, x.Customer.Name, x.Status, x.PlannedDeliveryOn, x.ValueCzk, x.WeightKg, x.WorkflowSteps.Count(s => s.Status == WorkflowStepStatus.Completed || s.Status == WorkflowStepStatus.NotRequired), x.WorkflowSteps.Count, x.OrderedOn, x.Carrier != null ? x.Carrier.Name : null)).ToListAsync(cancellationToken);
         return new PagedResult<OrderListItem>(items, page, pageSize, totalCount);
     }
 
@@ -74,6 +81,19 @@ public sealed class BcgHubRepository(BcgHubDbContext db) : IOrderReadRepository,
         catch (DbUpdateConcurrencyException) { throw new ConcurrencyConflictException("Záznam mezitím změnil jiný uživatel. Načtěte aktuální data a zkuste to znovu."); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation }) { throw new DomainValidationException("Záznam se stejným unikátním údajem již existuje."); }
     }
+
+    public async Task<IReadOnlyDictionary<string, Guid>> FindCustomersAsync(IEnumerable<PohodaCustomerData> customers, CancellationToken cancellationToken)
+    {
+        var requestedKeys = customers.Select(PohodaOrderImportService.CustomerKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var existing = await db.BusinessPartners.AsNoTracking().Where(x => x.Type == PartnerType.Customer).Select(x => new { x.Id, x.Name, x.CompanyNumber, x.VatNumber, x.CountryCode }).ToListAsync(cancellationToken);
+        return existing.Select(x => new { x.Id, Key = PohodaOrderImportService.CustomerKey(new PohodaCustomerData(x.Name, x.CompanyNumber, x.VatNumber, null, null, null, null, null, x.CountryCode)) }).Where(x => requestedKeys.Contains(x.Key)).GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase).ToDictionary(x => x.Key, x => x.First().Id, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public async Task<IReadOnlySet<string>> FindExistingPohodaOrderIdsAsync(IEnumerable<string> externalIds, CancellationToken cancellationToken) => (await db.Orders.AsNoTracking().Where(x => x.PohodaOrderId != null && externalIds.Contains(x.PohodaOrderId)).Select(x => x.PohodaOrderId!).ToListAsync(cancellationToken)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    public async Task<int> GetNextOrderSequenceAsync(int year, CancellationToken cancellationToken) { var prefix = $"BCG_{year}"; var numbers = await db.Orders.AsNoTracking().Where(x => x.Number.StartsWith(prefix)).Select(x => x.Number).ToListAsync(cancellationToken); return numbers.Select(x => int.TryParse(x[prefix.Length..], out var sequence) ? sequence : 0).DefaultIfEmpty().Max() + 1; }
+    public void AddImportedCustomer(BusinessPartner customer) => db.BusinessPartners.Add(customer);
+    public void AddImportedOrder(Order order) => db.Orders.Add(order);
+    public Task SaveImportAsync(CancellationToken cancellationToken) => SaveChangesAsync(cancellationToken);
 
     private static OrderDetailDto MapDetail(Order order)
     {

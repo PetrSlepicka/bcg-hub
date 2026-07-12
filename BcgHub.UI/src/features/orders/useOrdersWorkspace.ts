@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiError, api } from "../../api";
 import type { OrderDetail, OrderListItem, WorkflowStep, WorkflowStepStatus } from "../../domain";
 
 export function useOrdersWorkspace() {
+  const requestedEntityId = new URLSearchParams(window.location.search).get("entityId") ?? undefined;
   const [orders, setOrders] = useState<OrderListItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [selectedId, setSelectedId] = useState<string>();
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+  const [selectedId, setSelectedId] = useState<string | undefined>(requestedEntityId);
   const [detail, setDetail] = useState<OrderDetail>();
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("number");
@@ -19,10 +22,10 @@ export function useOrdersWorkspace() {
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setLoading(true);
-      api.orders.list(search, sortBy, descending, controller.signal).then(result => { setOrders(result.items); setTotalCount(result.totalCount); setSelectedId(current => current && result.items.some(x => x.id === current) ? current : result.items[0]?.id); setError(undefined); }).catch(caught => { if (caught?.name !== "AbortError") setError("Zakázky se nepodařilo načíst."); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+      api.orders.list(search, sortBy, descending, controller.signal, page, pageSize).then(result => { setOrders(result.items); setTotalCount(result.totalCount); setSelectedId(current => requestedEntityId && current === requestedEntityId ? current : current && result.items.some(x => x.id === current) ? current : result.items[0]?.id); setError(undefined); }).catch(caught => { if (caught?.name !== "AbortError") setError("Zakázky se nepodařilo načíst."); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, 180);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [search, sortBy, descending, refreshToken]);
+  }, [search, sortBy, descending, page, refreshToken]);
 
   useEffect(() => {
     if (!selectedId) { setDetail(undefined); return; }
@@ -53,5 +56,7 @@ export function useOrdersWorkspace() {
     finally { setUpdatingSteps(current => { const next = new Set(current); next.delete(step.id); return next; }); }
   };
 
-  return { orders, totalCount, selectedId, detail, search, sortBy, descending, loading, error, updatingSteps, totalValue: useMemo(() => orders.reduce((sum, order) => sum + order.valueCzk, 0), [orders]), setSelectedId, setSearch, setSortBy, setDescending, updateStep, refresh: () => setRefreshToken(x => x + 1) };
+  const changeSearch = (value: string) => { setSearch(value); setPage(1); };
+  const changeSortBy = (value: string) => { setSortBy(value); setPage(1); };
+  return { orders, totalCount, page, pageSize, selectedId, detail, search, sortBy, descending, loading, error, updatingSteps, setSelectedId, setSearch: changeSearch, setSortBy: changeSortBy, setDescending, setPage, updateStep, refresh: () => setRefreshToken(x => x + 1) };
 }

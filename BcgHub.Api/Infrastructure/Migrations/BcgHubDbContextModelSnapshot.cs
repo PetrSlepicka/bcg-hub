@@ -461,15 +461,30 @@ namespace BcgHub.Api.Infrastructure.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("MicrosoftDeltaLink")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<string>("MicrosoftMailboxAddress")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
                     b.Property<string>("ProtectedImapPassword")
                         .IsRequired()
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
 
+                    b.Property<string>("ProtectedMicrosoftRefreshToken")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
                     b.Property<string>("ProtectedSmtpPassword")
                         .IsRequired()
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
+
+                    b.Property<int>("Provider")
+                        .HasColumnType("integer");
 
                     b.Property<string>("SenderAddress")
                         .IsRequired()
@@ -689,6 +704,10 @@ namespace BcgHub.Api.Infrastructure.Migrations
                     b.Property<DateOnly?>("PlannedPickupOn")
                         .HasColumnType("date");
 
+                    b.Property<string>("PohodaOrderId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("PohodaOrderNumber")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
@@ -744,6 +763,10 @@ namespace BcgHub.Api.Infrastructure.Migrations
 
                     b.HasIndex("Number")
                         .IsUnique();
+
+                    b.HasIndex("PohodaOrderId")
+                        .IsUnique()
+                        .HasFilter("\"PohodaOrderId\" IS NOT NULL");
 
                     b.HasIndex("WarehouseId");
 

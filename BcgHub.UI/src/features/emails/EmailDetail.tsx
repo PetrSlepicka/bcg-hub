@@ -1,41 +1,41 @@
-import { useEffect, useState } from "react";
-import { Link2, Reply, Truck } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Link2, Reply } from "lucide-react";
 import { api, ApiError } from "../../api";
-import type { EmailMessage, EmailOrderOptions, EmailTransportQuoteContext } from "../../domain";
+import type { EmailActionContext, EmailMessage, EmailOrderOptions, EmailTransportQuoteContext, PartnerType } from "../../domain";
 import { EntityResourcesPanel } from "../../shared/EntityResourcesPanel";
 import { EmailComposer } from "./EmailComposer";
 import { TransportQuoteModal } from "./TransportQuoteModal";
+import { EmailActionBar } from "./EmailActionBar";
+import { SearchableSelect } from "./SearchableSelect";
+import { EntityLink, orderHref, partnerHref } from "../../shared/EntityLink";
 
-export function EmailDetail({ email, onChange, onSent }: { email: EmailMessage; onChange: (email: EmailMessage) => void; onSent: (email: EmailMessage) => void }) {
-  const [partnerId, setPartnerId] = useState(email.businessPartnerId ?? "");
-  const [orderId, setOrderId] = useState(email.orderId ?? "");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string>();
-  const [partners, setPartners] = useState<{ id: string; name: string }[]>([]);
-  const [orderOptions, setOrderOptions] = useState<EmailOrderOptions>({ suggested: [], other: [] });
-  const [composing, setComposing] = useState(false);
-  const [transportQuoteContext, setTransportQuoteContext] = useState<EmailTransportQuoteContext>();
-  const [transportQuoteOpen, setTransportQuoteOpen] = useState(false);
+export function EmailDetail({ email, onChange, onSent, onCreateOrder, onCreatePartner }: { email: EmailMessage; onChange: (email: EmailMessage) => void; onSent: (email: EmailMessage) => void; onCreateOrder: (customerId: string | undefined, email: EmailMessage) => void; onCreatePartner: (type: PartnerType, email: EmailMessage) => void }) {
+  const [partnerId, setPartnerId] = useState(email.businessPartnerId ?? ""); const [orderId, setOrderId] = useState(email.orderId ?? ""); const [saving, setSaving] = useState(false); const [error, setError] = useState<string>();
+  const [partners, setPartners] = useState<{ id: string; name: string; type: PartnerType; email?: string }[]>([]); const [partnerSearch, setPartnerSearch] = useState(""); const [orderOptions, setOrderOptions] = useState<EmailOrderOptions>({ suggested: [], other: [] });
+  const [composing, setComposing] = useState(false); const [transportQuoteContext, setTransportQuoteContext] = useState<EmailTransportQuoteContext>(); const [transportQuoteOpen, setTransportQuoteOpen] = useState(false); const [actionContext, setActionContext] = useState<EmailActionContext>();
+  const linkBarRef = useRef<HTMLDivElement>(null); const orderInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setPartnerId(email.businessPartnerId ?? ""); setOrderId(email.orderId ?? ""); }, [email.id, email.businessPartnerId, email.orderId]);
-  useEffect(() => {
-    const controller = new AbortController();
-    Promise.all([api.emails.orderOptions(email.id, controller.signal), ...(["Customer", "Lead", "Supplier", "Warehouse", "Carrier", "CustomsDeclarant", "Collaborator"] as const).map(type => api.partners.list(type, "", controller.signal))]).then(([options, ...partnerResults]) => {
-      setOrderOptions(options);
-      setPartners(partnerResults.flatMap(result => result.items).map(partner => ({ id: partner.id, name: partner.name })).sort((a, b) => a.name.localeCompare(b.name, "cs")));
-    }).catch(caught => { if (caught?.name !== "AbortError") console.error(caught); });
-    return () => controller.abort();
-  }, [email.id]);
+  useEffect(() => { const controller = new AbortController(); setPartners([]); setPartnerSearch(""); api.emails.orderOptions(email.id, controller.signal).then(setOrderOptions).catch(caught => { if (caught?.name !== "AbortError") console.error(caught); }); return () => controller.abort(); }, [email.id]);
+  useEffect(() => { const controller = new AbortController(); const timeout = window.setTimeout(() => { api.partners.list(undefined, partnerSearch, controller.signal).then(result => { const loaded = result.items.map(partner => ({ id: partner.id, name: partner.name, type: partner.type, email: partner.email })); setPartners(current => [...loaded, ...current.filter(partner => partner.id === partnerId && !loaded.some(item => item.id === partner.id))].sort((a, b) => a.name.localeCompare(b.name, "cs"))); }).catch(caught => { if (caught?.name !== "AbortError") console.error(caught); }); }, 180); return () => { window.clearTimeout(timeout); controller.abort(); }; }, [email.id, partnerSearch, partnerId]);
   useEffect(() => { if (email.direction !== "Inbound") { setTransportQuoteContext(undefined); return; } const controller = new AbortController(); api.emails.transportQuoteContext(email.id, controller.signal).then(setTransportQuoteContext).catch(caught => { if (!(caught instanceof ApiError && caught.status === 404) && caught?.name !== "AbortError") console.error(caught); }); return () => controller.abort(); }, [email.id, email.direction]);
+  useEffect(() => { if (email.direction !== "Inbound") { setActionContext(undefined); return; } const controller = new AbortController(); setActionContext(undefined); api.emails.actionContext(email.id, controller.signal).then(context => { setActionContext(context); if (context.partner && !email.businessPartnerId) { setPartnerId(context.partner.id); const inferredPartner = { ...context.partner, type: partnerTypeForSender(context.senderType) }; setPartners(current => current.some(partner => partner.id === context.partner!.id) ? current : [...current, inferredPartner].sort((a, b) => a.name.localeCompare(b.name, "cs"))); } }).catch(caught => { if (caught?.name !== "AbortError") setActionContext({ senderType: "Unknown", matchedBy: "None" }); }); return () => controller.abort(); }, [email.id, email.direction, email.businessPartnerId]);
 
   const saveLink = async () => { setSaving(true); setError(undefined); try { onChange(await api.emails.link(email, partnerId, orderId)); } catch (caught) { setError(caught instanceof Error ? caught.message : "Vazbu se nepodařilo uložit."); } finally { setSaving(false); } };
-  const option = (order: EmailOrderOptions["other"][number]) => <option key={order.id} value={order.id}>{order.number} · {order.title} · {order.customerName}</option>;
+  const partnerOptions = partners.map(partner => ({ id: partner.id, label: partner.email ? `${partner.name} · ${partner.email}` : partner.name }));
+  const orderSearchOptions = [...orderOptions.suggested.map(order => ({ id: order.id, label: `${order.number} · ${order.title} · ${order.customerName}`, group: "Pravděpodobné zakázky" })), ...orderOptions.other.map(order => ({ id: order.id, label: `${order.number} · ${order.title} · ${order.customerName}`, group: "Ostatní zakázky" }))];
+  const selectedPartner = partners.find(partner => partner.id === email.businessPartnerId);
+  const selectedOrder = [...orderOptions.suggested, ...orderOptions.other].find(order => order.id === email.orderId);
 
   return <>
-    <header className="detail-header"><div><p className="eyebrow">{email.direction === "Inbound" ? "PŘÍCHOZÍ E-MAIL" : "ODESLANÝ E-MAIL"}</p><h2>{email.subject}</h2><p>{email.fromName ? `${email.fromName} · ${email.fromAddress}` : email.fromAddress} → {email.toAddress}</p></div><div className="email-detail-actions">{transportQuoteContext && <button className="secondary" onClick={() => setTransportQuoteOpen(true)}><Truck size={15} /> Přiřadit jako nabídku dopravy</button>}<button className="primary" onClick={() => setComposing(true)}><Reply size={15} /> Odpovědět</button></div></header>
-    <div className="email-link-bar"><Link2 size={16} /><label>Partner <select value={partnerId} onChange={event => setPartnerId(event.target.value)}><option value="">Bez přiřazení</option>{partners.map(partner => <option key={partner.id} value={partner.id}>{partner.name}</option>)}</select></label><label>Zakázka <select value={orderId} onChange={event => setOrderId(event.target.value)}><option value="">Bez přiřazení</option>{orderOptions.suggested.length > 0 && <optgroup label="Pravděpodobné zakázky">{orderOptions.suggested.map(option)}</optgroup>}<optgroup label="──────── Ostatní zakázky ────────">{orderOptions.other.map(option)}</optgroup></select></label><button className="secondary" onClick={saveLink} disabled={saving}>Uložit vazbu</button>{error && <span className="inline-error">{error}</span>}</div>
+    <EmailActionBar email={email} context={actionContext} transportAvailable={!!transportQuoteContext} onAssign={() => { linkBarRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); orderInputRef.current?.focus(); }} onTransportQuote={() => setTransportQuoteOpen(true)} onCreateOrder={customerId => onCreateOrder(customerId, email)} onCreatePartner={type => onCreatePartner(type, email)} />
+    {(email.businessPartnerId || email.orderId) && <div className="entity-reference-bar"><span>Přiřazeno:</span>{email.businessPartnerId && <EntityLink href={partnerHref(email.businessPartnerId, selectedPartner?.type ?? "Customer")}>{email.businessPartnerName ?? selectedPartner?.name ?? "Otevřít osobu"}</EntityLink>}{email.orderId && <EntityLink href={orderHref(email.orderId)}>{email.orderNumber ?? selectedOrder?.number ?? "Otevřít zakázku"}</EntityLink>}</div>}
+    <header className="detail-header"><div><p className="eyebrow">{email.direction === "Inbound" ? "PŘÍCHOZÍ E-MAIL" : "ODESLANÝ E-MAIL"}</p><h2>{email.subject}</h2><p>{email.fromName ? `${email.fromName} · ${email.fromAddress}` : email.fromAddress} → {email.toAddress}</p></div><div className="email-detail-actions"><button className="primary" onClick={() => setComposing(true)}><Reply size={15} /> Odpovědět</button></div></header>
+    <div className="email-link-bar" ref={linkBarRef}><Link2 size={16} /><label>Partner <SearchableSelect value={partnerId} options={partnerOptions} placeholder="Bez přiřazení" searchPlaceholder="Hledat partnera…" onChange={setPartnerId} onSearchChange={setPartnerSearch} /></label><label>Zakázka <SearchableSelect value={orderId} inputRef={orderInputRef} options={orderSearchOptions} placeholder="Bez přiřazení" searchPlaceholder="Hledat číslo, název nebo zákazníka…" onChange={setOrderId} /></label><button className="secondary" onClick={saveLink} disabled={saving}>Uložit vazbu</button>{error && <span className="inline-error">{error}</span>}</div>
     <div className="email-detail-content"><div className="email-envelope"><span><b>Od:</b> {email.fromAddress}</span><span><b>Komu:</b> {email.toAddress}</span><span><b>Datum:</b> {new Intl.DateTimeFormat("cs-CZ", { dateStyle: "long", timeStyle: "short" }).format(new Date(email.occurredAtUtc))}</span></div>{email.bodyHtml ? <iframe title="Obsah e-mailu" sandbox="" srcDoc={email.bodyHtml} /> : <pre>{email.bodyText || "E-mail nemá textový obsah."}</pre>}{email.hasAttachments && <><h3>Přílohy</h3><EntityResourcesPanel ownerType="EmailMessage" ownerId={email.id} mode="files" /></>}</div>
     {composing && <EmailComposer email={email} onClose={() => setComposing(false)} onSent={sent => { setComposing(false); onSent(sent); }} />}
-    {transportQuoteOpen && transportQuoteContext && <TransportQuoteModal email={email} context={transportQuoteContext} onClose={() => setTransportQuoteOpen(false)} />}
+    {transportQuoteOpen && transportQuoteContext && <TransportQuoteModal email={email} context={transportQuoteContext} onClose={() => setTransportQuoteOpen(false)} onCreated={async () => onChange(await api.emails.detail(email.id))} />}
   </>;
 }
+
+function partnerTypeForSender(senderType: EmailActionContext["senderType"]): PartnerType { return senderType === "Carrier" || senderType === "Warehouse" || senderType === "Collaborator" || senderType === "Customer" ? senderType : "Customer"; }

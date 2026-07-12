@@ -22,6 +22,7 @@ public sealed class EmailSettingsService(BcgHubDbContext db, CurrentUserAccessor
         settings ??= new EmailAccountSettings { UserAccountId = currentUser.UserId };
         if (db.Entry(settings).State == EntityState.Detached) db.EmailAccountSettings.Add(settings);
         settings.ImapServer = request.ImapServer.Trim();
+        settings.Provider = EmailProvider.ImapSmtp;
         settings.ImapPort = request.ImapPort;
         settings.ImapUseSsl = true;
         settings.ImapUsername = request.ImapUsername.Trim();
@@ -40,8 +41,20 @@ public sealed class EmailSettingsService(BcgHubDbContext db, CurrentUserAccessor
         return Map(settings);
     }
 
+    public async Task<EmailSettingsDto> SetProviderAsync(string provider, CancellationToken cancellationToken)
+    {
+        if (!Enum.TryParse<EmailProvider>(provider, true, out var parsed)) throw new DomainValidationException("Neznámý poskytovatel e-mailu.");
+        var settings = await db.EmailAccountSettings.SingleOrDefaultAsync(x => x.UserAccountId == currentUser.UserId, cancellationToken) ?? new EmailAccountSettings { UserAccountId = currentUser.UserId };
+        if (parsed == EmailProvider.MicrosoftGraph && string.IsNullOrEmpty(settings.ProtectedMicrosoftRefreshToken)) throw new DomainValidationException("Nejdříve připojte účet Microsoft.");
+        if (db.Entry(settings).State == EntityState.Detached) db.EmailAccountSettings.Add(settings);
+        settings.Provider = parsed;
+        settings.IsActive = true;
+        await db.SaveChangesAsync(cancellationToken);
+        return Map(settings);
+    }
+
     public string Unprotect(EmailAccountSettings settings) => _protector.Unprotect(settings.ProtectedImapPassword);
     public string UnprotectSmtpPassword(EmailAccountSettings settings) => _protector.Unprotect(settings.ProtectedSmtpPassword);
 
-    private static EmailSettingsDto Map(EmailAccountSettings settings) => new(settings.ImapServer, settings.ImapPort, settings.ImapUseSsl, settings.ImapUsername, !string.IsNullOrEmpty(settings.ProtectedImapPassword), settings.SmtpServer, settings.SmtpPort, settings.SmtpUseSsl, settings.SmtpUsername, !string.IsNullOrEmpty(settings.ProtectedSmtpPassword), settings.SenderAddress, settings.SenderName, settings.IsActive);
+    internal static EmailSettingsDto Map(EmailAccountSettings settings) => new(settings.Provider.ToString(), settings.ImapServer, settings.ImapPort, settings.ImapUseSsl, settings.ImapUsername, !string.IsNullOrEmpty(settings.ProtectedImapPassword), settings.SmtpServer, settings.SmtpPort, settings.SmtpUseSsl, settings.SmtpUsername, !string.IsNullOrEmpty(settings.ProtectedSmtpPassword), settings.SenderAddress, settings.SenderName, settings.IsActive, !string.IsNullOrEmpty(settings.ProtectedMicrosoftRefreshToken), settings.MicrosoftMailboxAddress);
 }
