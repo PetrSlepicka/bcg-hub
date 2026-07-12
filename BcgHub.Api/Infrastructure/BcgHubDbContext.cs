@@ -9,6 +9,7 @@ public sealed class BcgHubDbContext(DbContextOptions<BcgHubDbContext> options) :
     public DbSet<BusinessPartner> BusinessPartners => Set<BusinessPartner>();
     public DbSet<ContactPerson> ContactPeople => Set<ContactPerson>();
     public DbSet<Order> Orders => Set<Order>();
+    public DbSet<Complaint> Complaints => Set<Complaint>();
     public DbSet<OrderWorkflowStep> OrderWorkflowSteps => Set<OrderWorkflowStep>();
     public DbSet<TransportQuote> TransportQuotes => Set<TransportQuote>();
     public DbSet<Comment> Comments => Set<Comment>();
@@ -16,6 +17,7 @@ public sealed class BcgHubDbContext(DbContextOptions<BcgHubDbContext> options) :
     public DbSet<Communication> Communications => Set<Communication>();
     public DbSet<EmailAccountSettings> EmailAccountSettings => Set<EmailAccountSettings>();
     public DbSet<EmailMessage> EmailMessages => Set<EmailMessage>();
+    public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

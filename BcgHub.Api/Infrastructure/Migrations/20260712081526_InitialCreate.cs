@@ -330,6 +330,7 @@ namespace BcgHub.Api.Infrastructure.Migrations
                     WorkflowStepId = table.Column<Guid>(type: "uuid", nullable: true),
                     TransportQuoteId = table.Column<Guid>(type: "uuid", nullable: true),
                     CommunicationId = table.Column<Guid>(type: "uuid", nullable: true),
+                    EmailMessageId = table.Column<Guid>(type: "uuid", nullable: true),
                     FileName = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
                     ContentType = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     Size = table.Column<long>(type: "bigint", nullable: false),
@@ -341,7 +342,7 @@ namespace BcgHub.Api.Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Attachments", x => x.Id);
-                    table.CheckConstraint("CK_Attachments_ExactlyOneOwner", "num_nonnulls(\"BusinessPartnerId\", \"ContactPersonId\", \"OrderId\", \"WorkflowStepId\", \"TransportQuoteId\", \"CommunicationId\") = 1");
+                    table.CheckConstraint("CK_Attachments_ExactlyOneOwner", "num_nonnulls(\"BusinessPartnerId\", \"ContactPersonId\", \"OrderId\", \"WorkflowStepId\", \"TransportQuoteId\", \"CommunicationId\", \"EmailMessageId\") = 1");
                     table.CheckConstraint("CK_Attachments_NonNegativeSize", "\"Size\" >= 0");
                     table.ForeignKey(
                         name: "FK_Attachments_BusinessPartners_BusinessPartnerId",
@@ -359,6 +360,12 @@ namespace BcgHub.Api.Infrastructure.Migrations
                         name: "FK_Attachments_ContactPeople_ContactPersonId",
                         column: x => x.ContactPersonId,
                         principalTable: "ContactPeople",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_Attachments_EmailMessages_EmailMessageId",
+                        column: x => x.EmailMessageId,
+                        principalTable: "EmailMessages",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
@@ -392,6 +399,7 @@ namespace BcgHub.Api.Infrastructure.Migrations
                     WorkflowStepId = table.Column<Guid>(type: "uuid", nullable: true),
                     TransportQuoteId = table.Column<Guid>(type: "uuid", nullable: true),
                     CommunicationId = table.Column<Guid>(type: "uuid", nullable: true),
+                    EmailMessageId = table.Column<Guid>(type: "uuid", nullable: true),
                     AuthorName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     Text = table.Column<string>(type: "character varying(10000)", maxLength: 10000, nullable: false),
                     CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -401,7 +409,7 @@ namespace BcgHub.Api.Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Comments", x => x.Id);
-                    table.CheckConstraint("CK_Comments_ExactlyOneOwner", "num_nonnulls(\"BusinessPartnerId\", \"ContactPersonId\", \"OrderId\", \"WorkflowStepId\", \"TransportQuoteId\", \"CommunicationId\") = 1");
+                    table.CheckConstraint("CK_Comments_ExactlyOneOwner", "num_nonnulls(\"BusinessPartnerId\", \"ContactPersonId\", \"OrderId\", \"WorkflowStepId\", \"TransportQuoteId\", \"CommunicationId\", \"EmailMessageId\") = 1");
                     table.ForeignKey(
                         name: "FK_Comments_BusinessPartners_BusinessPartnerId",
                         column: x => x.BusinessPartnerId,
@@ -418,6 +426,12 @@ namespace BcgHub.Api.Infrastructure.Migrations
                         name: "FK_Comments_ContactPeople_ContactPersonId",
                         column: x => x.ContactPersonId,
                         principalTable: "ContactPeople",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_Comments_EmailMessages_EmailMessageId",
+                        column: x => x.EmailMessageId,
+                        principalTable: "EmailMessages",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
@@ -456,6 +470,11 @@ namespace BcgHub.Api.Infrastructure.Migrations
                 columns: new[] { "ContactPersonId", "CreatedAtUtc" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_Attachments_EmailMessageId_CreatedAtUtc",
+                table: "Attachments",
+                columns: new[] { "EmailMessageId", "CreatedAtUtc" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Attachments_OrderId_CreatedAtUtc",
                 table: "Attachments",
                 columns: new[] { "OrderId", "CreatedAtUtc" });
@@ -489,6 +508,11 @@ namespace BcgHub.Api.Infrastructure.Migrations
                 name: "IX_Comments_ContactPersonId_CreatedAtUtc",
                 table: "Comments",
                 columns: new[] { "ContactPersonId", "CreatedAtUtc" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Comments_EmailMessageId_CreatedAtUtc",
+                table: "Comments",
+                columns: new[] { "EmailMessageId", "CreatedAtUtc" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Comments_OrderId_CreatedAtUtc",
@@ -635,10 +659,10 @@ namespace BcgHub.Api.Infrastructure.Migrations
                 name: "EmailAccountSettings");
 
             migrationBuilder.DropTable(
-                name: "EmailMessages");
+                name: "Communications");
 
             migrationBuilder.DropTable(
-                name: "Communications");
+                name: "EmailMessages");
 
             migrationBuilder.DropTable(
                 name: "OrderWorkflowSteps");

@@ -7,7 +7,7 @@ public sealed class BcgHubDbContextFactory : IDesignTimeDbContextFactory<BcgHubD
 {
     public BcgHubDbContext CreateDbContext(string[] args)
     {
-        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection") ?? "Host=localhost;Port=5432;Database=bcg_hub;Username=postgres;Password=postgres";
+        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection") ?? throw new InvalidOperationException("Set ConnectionStrings__DefaultConnection before running EF tools.");
         return new BcgHubDbContext(new DbContextOptionsBuilder<BcgHubDbContext>().UseNpgsql(connectionString).Options);
     }
 }

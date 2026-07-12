@@ -11,7 +11,23 @@ public sealed class EmailAccountSettings : Entity
     public bool ImapUseSsl { get; set; } = true;
     public string ImapUsername { get; set; } = "";
     public string ProtectedImapPassword { get; set; } = "";
+    public string SmtpServer { get; set; } = "";
+    public int SmtpPort { get; set; } = 587;
+    public bool SmtpUseSsl { get; set; } = true;
+    public string SmtpUsername { get; set; } = "";
+    public string ProtectedSmtpPassword { get; set; } = "";
+    public string SenderAddress { get; set; } = "";
+    public string? SenderName { get; set; }
     public bool IsActive { get; set; } = true;
+}
+
+public sealed class EmailTemplate : Entity
+{
+    public Guid UserAccountId { get; set; }
+    public UserAccount UserAccount { get; set; } = null!;
+    public string Name { get; set; } = "";
+    public string Subject { get; set; } = "";
+    public string BodyHtml { get; set; } = "";
 }
 
 public sealed class EmailMessage : Entity

@@ -13,6 +13,7 @@ export function useOrdersWorkspace() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [updatingSteps, setUpdatingSteps] = useState<ReadonlySet<string>>(new Set());
+  const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -21,7 +22,7 @@ export function useOrdersWorkspace() {
       api.orders.list(search, sortBy, descending, controller.signal).then(result => { setOrders(result.items); setTotalCount(result.totalCount); setSelectedId(current => current && result.items.some(x => x.id === current) ? current : result.items[0]?.id); setError(undefined); }).catch(caught => { if (caught?.name !== "AbortError") setError("Zakázky se nepodařilo načíst."); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, 180);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [search, sortBy, descending]);
+  }, [search, sortBy, descending, refreshToken]);
 
   useEffect(() => {
     if (!selectedId) { setDetail(undefined); return; }
@@ -52,5 +53,5 @@ export function useOrdersWorkspace() {
     finally { setUpdatingSteps(current => { const next = new Set(current); next.delete(step.id); return next; }); }
   };
 
-  return { orders, totalCount, selectedId, detail, search, sortBy, descending, loading, error, updatingSteps, totalValue: useMemo(() => orders.reduce((sum, order) => sum + order.valueCzk, 0), [orders]), setSelectedId, setSearch, setSortBy, setDescending, updateStep };
+  return { orders, totalCount, selectedId, detail, search, sortBy, descending, loading, error, updatingSteps, totalValue: useMemo(() => orders.reduce((sum, order) => sum + order.valueCzk, 0), [orders]), setSelectedId, setSearch, setSortBy, setDescending, updateStep, refresh: () => setRefreshToken(x => x + 1) };
 }

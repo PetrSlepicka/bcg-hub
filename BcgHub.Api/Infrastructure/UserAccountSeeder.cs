@@ -1,15 +1,13 @@
 using BcgHub.Api.Domain;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 namespace BcgHub.Api.Infrastructure;
 
-public sealed class UserAccountSeeder(BcgHubDbContext db, IPasswordHasher<UserAccount> passwordHasher, IOptions<BootstrapAdminOptions> options, ILogger<UserAccountSeeder> logger)
+public sealed class UserAccountSeeder(BcgHubDbContext db, IPasswordHasher<UserAccount> passwordHasher, BootstrapAdminOptions bootstrap, ILogger<UserAccountSeeder> logger)
 {
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
-        var bootstrap = options.Value;
         if (string.IsNullOrWhiteSpace(bootstrap.Email) || string.IsNullOrWhiteSpace(bootstrap.Password)) return;
         if (bootstrap.Password.Length < 12) throw new InvalidOperationException("BootstrapAdmin password must contain at least 12 characters.");
         var email = bootstrap.Email.Trim().ToLowerInvariant();

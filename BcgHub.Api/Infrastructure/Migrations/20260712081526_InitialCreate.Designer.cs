@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BcgHub.Api.Infrastructure.Migrations
 {
     [DbContext(typeof(BcgHubDbContext))]
-    [Migration("20260712080926_AddEmailWorkspace")]
-    partial class AddEmailWorkspace
+    [Migration("20260712081526_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

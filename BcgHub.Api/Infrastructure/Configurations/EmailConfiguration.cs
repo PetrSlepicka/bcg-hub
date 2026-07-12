@@ -4,13 +4,18 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace BcgHub.Api.Infrastructure.Configurations;
 
-public sealed class EmailConfiguration : IEntityTypeConfiguration<EmailAccountSettings>, IEntityTypeConfiguration<EmailMessage>
+public sealed class EmailConfiguration : IEntityTypeConfiguration<EmailAccountSettings>, IEntityTypeConfiguration<EmailMessage>, IEntityTypeConfiguration<EmailTemplate>
 {
     public void Configure(EntityTypeBuilder<EmailAccountSettings> entity)
     {
         entity.Property(x => x.ImapServer).HasMaxLength(300).IsRequired();
         entity.Property(x => x.ImapUsername).HasMaxLength(320).IsRequired();
         entity.Property(x => x.ProtectedImapPassword).HasMaxLength(4000).IsRequired();
+        entity.Property(x => x.SmtpServer).HasMaxLength(300).IsRequired();
+        entity.Property(x => x.SmtpUsername).HasMaxLength(320).IsRequired();
+        entity.Property(x => x.ProtectedSmtpPassword).HasMaxLength(4000).IsRequired();
+        entity.Property(x => x.SenderAddress).HasMaxLength(320).IsRequired();
+        entity.Property(x => x.SenderName).HasMaxLength(300);
         entity.HasIndex(x => x.UserAccountId).IsUnique();
         entity.HasOne(x => x.UserAccount).WithMany().HasForeignKey(x => x.UserAccountId).OnDelete(DeleteBehavior.Cascade);
     }
@@ -29,5 +34,14 @@ public sealed class EmailConfiguration : IEntityTypeConfiguration<EmailAccountSe
         entity.HasOne(x => x.UserAccount).WithMany().HasForeignKey(x => x.UserAccountId).OnDelete(DeleteBehavior.Cascade);
         entity.HasOne(x => x.BusinessPartner).WithMany().HasForeignKey(x => x.BusinessPartnerId).OnDelete(DeleteBehavior.SetNull);
         entity.HasOne(x => x.Order).WithMany().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.SetNull);
+    }
+
+    public void Configure(EntityTypeBuilder<EmailTemplate> entity)
+    {
+        entity.Property(x => x.Name).HasMaxLength(200).IsRequired();
+        entity.Property(x => x.Subject).HasMaxLength(1000).IsRequired();
+        entity.Property(x => x.BodyHtml).IsRequired();
+        entity.HasIndex(x => new { x.UserAccountId, x.Name }).IsUnique();
+        entity.HasOne(x => x.UserAccount).WithMany().HasForeignKey(x => x.UserAccountId).OnDelete(DeleteBehavior.Cascade);
     }
 }

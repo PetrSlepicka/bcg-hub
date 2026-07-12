@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BcgHub.Api.Infrastructure.Migrations
 {
     [DbContext(typeof(BcgHubDbContext))]
-    [Migration("20260712080225_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20260712091305_AddSmtpAndEmailTemplates")]
+    partial class AddSmtpAndEmailTemplates
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -37,6 +37,9 @@ namespace BcgHub.Api.Infrastructure.Migrations
                     b.Property<Guid?>("CommunicationId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ComplaintId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("ContactPersonId")
                         .HasColumnType("uuid");
 
@@ -47,6 +50,9 @@ namespace BcgHub.Api.Infrastructure.Migrations
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("EmailMessageId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("FileName")
                         .IsRequired()
@@ -81,11 +87,15 @@ namespace BcgHub.Api.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ComplaintId");
+
                     b.HasIndex("BusinessPartnerId", "CreatedAtUtc");
 
                     b.HasIndex("CommunicationId", "CreatedAtUtc");
 
                     b.HasIndex("ContactPersonId", "CreatedAtUtc");
+
+                    b.HasIndex("EmailMessageId", "CreatedAtUtc");
 
                     b.HasIndex("OrderId", "CreatedAtUtc");
 
@@ -95,7 +105,7 @@ namespace BcgHub.Api.Infrastructure.Migrations
 
                     b.ToTable("Attachments", t =>
                         {
-                            t.HasCheckConstraint("CK_Attachments_ExactlyOneOwner", "num_nonnulls(\"BusinessPartnerId\", \"ContactPersonId\", \"OrderId\", \"WorkflowStepId\", \"TransportQuoteId\", \"CommunicationId\") = 1");
+                            t.HasCheckConstraint("CK_Attachments_ExactlyOneOwner", "num_nonnulls(\"BusinessPartnerId\", \"ContactPersonId\", \"OrderId\", \"WorkflowStepId\", \"TransportQuoteId\", \"CommunicationId\", \"EmailMessageId\") = 1");
 
                             t.HasCheckConstraint("CK_Attachments_NonNegativeSize", "\"Size\" >= 0");
                         });
@@ -195,11 +205,17 @@ namespace BcgHub.Api.Infrastructure.Migrations
                     b.Property<Guid?>("CommunicationId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ComplaintId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("ContactPersonId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("EmailMessageId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("OrderId")
                         .HasColumnType("uuid");
@@ -226,11 +242,15 @@ namespace BcgHub.Api.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ComplaintId");
+
                     b.HasIndex("BusinessPartnerId", "CreatedAtUtc");
 
                     b.HasIndex("CommunicationId", "CreatedAtUtc");
 
                     b.HasIndex("ContactPersonId", "CreatedAtUtc");
+
+                    b.HasIndex("EmailMessageId", "CreatedAtUtc");
 
                     b.HasIndex("OrderId", "CreatedAtUtc");
 
@@ -240,7 +260,7 @@ namespace BcgHub.Api.Infrastructure.Migrations
 
                     b.ToTable("Comments", t =>
                         {
-                            t.HasCheckConstraint("CK_Comments_ExactlyOneOwner", "num_nonnulls(\"BusinessPartnerId\", \"ContactPersonId\", \"OrderId\", \"WorkflowStepId\", \"TransportQuoteId\", \"CommunicationId\") = 1");
+                            t.HasCheckConstraint("CK_Comments_ExactlyOneOwner", "num_nonnulls(\"BusinessPartnerId\", \"ContactPersonId\", \"OrderId\", \"WorkflowStepId\", \"TransportQuoteId\", \"CommunicationId\", \"EmailMessageId\") = 1");
                         });
                 });
 
@@ -317,6 +337,51 @@ namespace BcgHub.Api.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("CK_Communications_HasOwner", "\"BusinessPartnerId\" IS NOT NULL OR \"OrderId\" IS NOT NULL");
                         });
+                });
+
+            modelBuilder.Entity("BcgHub.Api.Domain.Complaint", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(10000)
+                        .HasColumnType("character varying(10000)");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("ReportedOn")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("Status", "ReportedOn");
+
+                    b.ToTable("Complaints");
                 });
 
             modelBuilder.Entity("BcgHub.Api.Domain.ContactPerson", b =>
@@ -403,6 +468,36 @@ namespace BcgHub.Api.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("ProtectedSmtpPassword")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("SenderAddress")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("SenderName")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int>("SmtpPort")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SmtpServer")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<bool>("SmtpUseSsl")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("SmtpUsername")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
 
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -517,6 +612,49 @@ namespace BcgHub.Api.Infrastructure.Migrations
                     b.HasIndex("UserAccountId", "OccurredAtUtc");
 
                     b.ToTable("EmailMessages");
+                });
+
+            modelBuilder.Entity("BcgHub.Api.Domain.EmailTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BodyHtml")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserAccountId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("EmailTemplates");
                 });
 
             modelBuilder.Entity("BcgHub.Api.Domain.Order", b =>
@@ -781,9 +919,18 @@ namespace BcgHub.Api.Infrastructure.Migrations
                         .HasForeignKey("CommunicationId")
                         .OnDelete(DeleteBehavior.Cascade);
 
+                    b.HasOne("BcgHub.Api.Domain.Complaint", "Complaint")
+                        .WithMany()
+                        .HasForeignKey("ComplaintId");
+
                     b.HasOne("BcgHub.Api.Domain.ContactPerson", "ContactPerson")
                         .WithMany()
                         .HasForeignKey("ContactPersonId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("BcgHub.Api.Domain.EmailMessage", "EmailMessage")
+                        .WithMany()
+                        .HasForeignKey("EmailMessageId")
                         .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("BcgHub.Api.Domain.Order", "Order")
@@ -805,7 +952,11 @@ namespace BcgHub.Api.Infrastructure.Migrations
 
                     b.Navigation("Communication");
 
+                    b.Navigation("Complaint");
+
                     b.Navigation("ContactPerson");
+
+                    b.Navigation("EmailMessage");
 
                     b.Navigation("Order");
 
@@ -826,9 +977,18 @@ namespace BcgHub.Api.Infrastructure.Migrations
                         .HasForeignKey("CommunicationId")
                         .OnDelete(DeleteBehavior.Cascade);
 
+                    b.HasOne("BcgHub.Api.Domain.Complaint", "Complaint")
+                        .WithMany()
+                        .HasForeignKey("ComplaintId");
+
                     b.HasOne("BcgHub.Api.Domain.ContactPerson", "ContactPerson")
                         .WithMany()
                         .HasForeignKey("ContactPersonId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("BcgHub.Api.Domain.EmailMessage", "EmailMessage")
+                        .WithMany()
+                        .HasForeignKey("EmailMessageId")
                         .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("BcgHub.Api.Domain.Order", "Order")
@@ -850,7 +1010,11 @@ namespace BcgHub.Api.Infrastructure.Migrations
 
                     b.Navigation("Communication");
 
+                    b.Navigation("Complaint");
+
                     b.Navigation("ContactPerson");
+
+                    b.Navigation("EmailMessage");
 
                     b.Navigation("Order");
 
@@ -872,6 +1036,25 @@ namespace BcgHub.Api.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("BusinessPartner");
+
+                    b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("BcgHub.Api.Domain.Complaint", b =>
+                {
+                    b.HasOne("BcgHub.Api.Domain.BusinessPartner", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BcgHub.Api.Domain.Order", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
 
                     b.Navigation("Order");
                 });
@@ -919,6 +1102,17 @@ namespace BcgHub.Api.Infrastructure.Migrations
                     b.Navigation("BusinessPartner");
 
                     b.Navigation("Order");
+
+                    b.Navigation("UserAccount");
+                });
+
+            modelBuilder.Entity("BcgHub.Api.Domain.EmailTemplate", b =>
+                {
+                    b.HasOne("BcgHub.Api.Domain.UserAccount", "UserAccount")
+                        .WithMany()
+                        .HasForeignKey("UserAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("UserAccount");
                 });

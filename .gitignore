@@ -1,9 +1,13 @@
 /.dotnet
 /.vs
 /.pnpm-store
+/secrets.txt
+/create-secrets.yaml
+/BcgHub.Api/App_Data
 
 /BcgHub.Api/bin
 /BcgHub.Api/obj
+/BcgHub.Api/publish
 /BcgHub.Api.Tests/bin
 /BcgHub.Api.Tests/obj
 /BcgHub.UI/dist

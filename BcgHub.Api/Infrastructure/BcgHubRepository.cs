@@ -1,6 +1,7 @@
 using BcgHub.Api.Application;
 using BcgHub.Api.Domain;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace BcgHub.Api.Infrastructure;
 
@@ -40,12 +41,14 @@ public sealed class BcgHubRepository(BcgHubDbContext db) : IOrderReadRepository,
 
     public Task<bool> NumberExistsAsync(string number, CancellationToken cancellationToken) => db.Orders.AnyAsync(x => x.Number == number, cancellationToken);
 
-    public async Task<OrderReferenceValidation> ValidateReferencesAsync(Guid customerId, Guid? contactId, Guid? warehouseId, CancellationToken cancellationToken)
+    public async Task<OrderReferenceValidation> ValidateReferencesAsync(Guid customerId, Guid? contactId, Guid? warehouseId, Guid? carrierId, Guid? customsDeclarantId, CancellationToken cancellationToken)
     {
         var customerIsValid = await db.BusinessPartners.AnyAsync(x => x.Id == customerId && x.Type == PartnerType.Customer, cancellationToken);
         var contactMatches = contactId is null || await db.ContactPeople.AnyAsync(x => x.Id == contactId && x.BusinessPartnerId == customerId, cancellationToken);
         var warehouseIsValid = warehouseId is null || await db.BusinessPartners.AnyAsync(x => x.Id == warehouseId && x.Type == PartnerType.Warehouse, cancellationToken);
-        return new OrderReferenceValidation(customerIsValid, contactMatches, warehouseIsValid);
+        var carrierIsValid = carrierId is null || await db.BusinessPartners.AnyAsync(x => x.Id == carrierId && x.Type == PartnerType.Carrier, cancellationToken);
+        var customsDeclarantIsValid = customsDeclarantId is null || await db.BusinessPartners.AnyAsync(x => x.Id == customsDeclarantId && x.Type == PartnerType.CustomsDeclarant, cancellationToken);
+        return new OrderReferenceValidation(customerIsValid, contactMatches, warehouseIsValid, carrierIsValid, customsDeclarantIsValid);
     }
 
     public Task AddAsync(Order order, CancellationToken cancellationToken)
@@ -55,19 +58,29 @@ public sealed class BcgHubRepository(BcgHubDbContext db) : IOrderReadRepository,
     }
 
     public Task<OrderWorkflowStep?> GetWorkflowStepAsync(Guid orderId, Guid stepId, CancellationToken cancellationToken) => db.OrderWorkflowSteps.SingleOrDefaultAsync(x => x.OrderId == orderId && x.Id == stepId, cancellationToken);
+    public Task<Order?> GetOrderAsync(Guid id, CancellationToken cancellationToken) => db.Orders.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+    public void SetOriginalVersion(Order order, uint version) => db.Entry(order).Property(x => x.Version).OriginalValue = version;
+    public void Remove(Order order) => db.Orders.Remove(order);
+    public Task<TransportQuote?> GetQuoteAsync(Guid orderId, Guid quoteId, CancellationToken cancellationToken) => db.TransportQuotes.Include(x => x.Carrier).SingleOrDefaultAsync(x => x.OrderId == orderId && x.Id == quoteId, cancellationToken);
+    public void SetOriginalVersion(TransportQuote quote, uint version) => db.Entry(quote).Property(x => x.Version).OriginalValue = version;
+    public Task<bool> IsCarrierAsync(Guid carrierId, CancellationToken cancellationToken) => db.BusinessPartners.AnyAsync(x => x.Id == carrierId && x.Type == PartnerType.Carrier, cancellationToken);
+    public async Task ClearSelectedQuoteAsync(Guid orderId, Guid? exceptId, CancellationToken cancellationToken) => await db.TransportQuotes.Where(x => x.OrderId == orderId && x.IsSelected && x.Id != exceptId).ExecuteUpdateAsync(update => update.SetProperty(x => x.IsSelected, false).SetProperty(x => x.UpdatedAtUtc, DateTime.UtcNow), cancellationToken);
+    public void AddQuote(TransportQuote quote) => db.TransportQuotes.Add(quote);
+    public void RemoveQuote(TransportQuote quote) => db.TransportQuotes.Remove(quote);
     public void SetOriginalVersion(OrderWorkflowStep step, uint version) => db.Entry(step).Property(x => x.Version).OriginalValue = version;
     public async Task SaveChangesAsync(CancellationToken cancellationToken)
     {
         try { await db.SaveChangesAsync(cancellationToken); }
         catch (DbUpdateConcurrencyException) { throw new ConcurrencyConflictException("Záznam mezitím změnil jiný uživatel. Načtěte aktuální data a zkuste to znovu."); }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation }) { throw new DomainValidationException("Záznam se stejným unikátním údajem již existuje."); }
     }
 
     private static OrderDetailDto MapDetail(Order order)
     {
         var definitions = WorkflowCatalog.All.ToDictionary(x => x.Type);
         var steps = order.WorkflowSteps.OrderBy(x => x.Type).Select(x => new WorkflowStepDto(x.Id, x.Type, definitions[x.Type].Title, definitions[x.Type].Description, x.Status, x.DueAtUtc, x.CompletedAtUtc, x.Notes, x.Version)).ToList();
-        var quotes = order.TransportQuotes.OrderByDescending(x => x.IsSelected).ThenBy(x => x.Price).Select(x => new TransportQuoteDto(x.Id, new PartnerReference(x.Carrier.Id, x.Carrier.Name), x.Price, x.Currency, x.PickupOn, x.DeliveryOn, x.IsSelected, x.Notes)).ToList();
-        return new OrderDetailDto(order.Id, order.Number, order.PohodaOrderNumber, order.Title, order.Status, new PartnerReference(order.Customer.Id, order.Customer.Name), order.CustomerContact?.FullName, ToReference(order.Warehouse), ToReference(order.Carrier), ToReference(order.CustomsDeclarant), order.OrderedOn, order.RequestedDeliveryOn, order.PlannedPickupOn, order.PlannedDeliveryOn, order.ValueCzk, order.WeightKg, order.VolumeM3, order.WarehouseInstructions, steps, quotes);
+        var quotes = order.TransportQuotes.OrderByDescending(x => x.IsSelected).ThenBy(x => x.Price).Select(x => new TransportQuoteDto(x.Id, new PartnerReference(x.Carrier.Id, x.Carrier.Name), x.Price, x.Currency, x.PickupOn, x.DeliveryOn, x.IsSelected, x.Notes, x.Version)).ToList();
+        return new OrderDetailDto(order.Id, order.Number, order.PohodaOrderNumber, order.Title, order.Status, new PartnerReference(order.Customer.Id, order.Customer.Name), order.CustomerContact?.FullName, ToReference(order.Warehouse), ToReference(order.Carrier), ToReference(order.CustomsDeclarant), order.OrderedOn, order.RequestedDeliveryOn, order.PlannedPickupOn, order.PlannedDeliveryOn, order.ValueCzk, order.WeightKg, order.VolumeM3, order.WarehouseInstructions, steps, quotes, order.CustomerContactId, order.Version);
     }
 
     private static PartnerReference? ToReference(BusinessPartner? partner) => partner is null ? null : new PartnerReference(partner.Id, partner.Name);

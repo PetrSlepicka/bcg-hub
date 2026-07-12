@@ -6,6 +6,7 @@ BCG HUB je interní systém pro koordinaci obchodu, backoffice, skladů, dopravy
 
 - `BcgHub.Api` — .NET 10 Web API, Entity Framework Core a PostgreSQL.
 - `BcgHub.UI` — React 19, TypeScript, Vite a Lucide ikony.
+- `BcgHub.Api.Tests` — unit testy doménových invariantů a aplikačních služeb.
 - `BcgHub.slnx` — solution nového projektu.
 
 ## Implementovaný základ
@@ -19,11 +20,22 @@ BCG HUB je interní systém pro koordinaci obchodu, backoffice, skladů, dopravy
 - API pro seznam a detail zakázek, změny stavu workflow a seznamy partnerů.
 - UI s ikonovým railem a dvoupanelovým rozložením seznam/detail.
 - Vyhledávání a řazení seznamu zakázek a vyhledávání/řazení partnerů.
+- Přihlášení uživatele a uživatelské menu s nastavením schránky a odhlášením.
+- Ruční IMAP synchronizace e-mailů přihlášeného uživatele, automatické rozpoznání vazeb a ruční přiřazení k partnerům a zakázkám.
 
 ## Lokální spuštění
 
 1. Spusťte PostgreSQL a vytvořte databázi `bcg_hub`.
-2. Upravte `ConnectionStrings:DefaultConnection` podle lokálního PostgreSQL.
+2. Nastavte konfiguraci pomocí user-secrets nebo environment variables. Hesla nejsou součástí `appsettings.json`:
+
+```powershell
+$env:ConnectionStrings__DefaultConnection='Host=localhost;Port=5432;Database=bcg_hub;Username=bcg_hub;Password=...'
+$env:BootstrapAdmin__Email='admin@example.com'
+$env:BootstrapAdmin__FullName='Administrátor'
+$env:BootstrapAdmin__Password='alespon-12-znaku'
+```
+
+Pro produkci nastavte také `AllowedHosts`, `Cors__Origins__0` a trvalou cestu `DataProtection__KeysPath` sdílenou všemi instancemi API.
 3. Spusťte API:
 
 ```powershell
@@ -38,12 +50,23 @@ pnpm install
 pnpm dev
 ```
 
-V development režimu API vytvoří schéma a vloží jednu ukázkovou zakázku. Pro nasazení se používají EF migrace.
+API při startu aplikuje EF migrace a volitelně vytvoří bootstrap účet. Přihlašovací cookie je `HttpOnly` a změnové endpointy vyžadují antiforgery token. Heslo k IMAP schránce se ukládá šifrovaně pomocí ASP.NET Data Protection.
+
+Frontend ve všech prostředích komunikuje výhradně se serverovou API na `https://dev.radixal.net/bcg-hub/api`.
+
+## Ověření
+
+```powershell
+dotnet build BcgHub.slnx
+dotnet test BcgHub.slnx
+cd BcgHub.UI
+pnpm install --frozen-lockfile
+pnpm run build
+```
 
 ## Navazující etapy
 
-- Přihlášení uživatele a synchronizace jeho e-mailové schránky.
-- Automatické i ruční přiřazování e-mailů k zákazníkům a zakázkám.
+- Pravidelná synchronizace e-mailové schránky na pozadí.
 - CRUD formuláře všech entit, komentářů a příloh v UI.
 - Integrace Pohody pro objednávky, faktury a vyskladnění.
 - Úložiště dokumentů, auditní historie a oprávnění.

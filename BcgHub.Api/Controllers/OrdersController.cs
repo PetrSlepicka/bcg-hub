@@ -21,7 +21,20 @@ public sealed class OrdersController(IOrderQueryService queries, IOrderCommandSe
         return CreatedAtAction(nameof(GetDetail), new { id = order.Id }, order);
     }
 
+    [HttpPut("{id:guid}"), ValidateAntiForgeryToken]
+    public async Task<ActionResult<OrderDetailDto>> Update(Guid id, UpdateOrderRequest request, CancellationToken cancellationToken) => await commands.UpdateAsync(id, request, cancellationToken) is { } order ? Ok(order) : NotFound();
+
+    [HttpDelete("{id:guid}"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> Delete(Guid id, [FromQuery] uint version, CancellationToken cancellationToken) => await commands.DeleteAsync(id, version, cancellationToken) ? NoContent() : NotFound();
+
     [HttpPatch("{orderId:guid}/workflow/{stepId:guid}")]
     [ValidateAntiForgeryToken]
     public async Task<ActionResult<WorkflowStepDto>> UpdateStep(Guid orderId, Guid stepId, UpdateWorkflowStepRequest request, CancellationToken cancellationToken) => await commands.UpdateStepAsync(orderId, stepId, request, cancellationToken) is { } step ? Ok(step) : NotFound();
+
+    [HttpPost("{orderId:guid}/quotes"), ValidateAntiForgeryToken]
+    public async Task<ActionResult<TransportQuoteDto>> AddQuote(Guid orderId, SaveTransportQuoteRequest request, CancellationToken cancellationToken) => await commands.AddQuoteAsync(orderId, request, cancellationToken) is { } quote ? Ok(quote) : NotFound();
+    [HttpPut("{orderId:guid}/quotes/{quoteId:guid}"), ValidateAntiForgeryToken]
+    public async Task<ActionResult<TransportQuoteDto>> UpdateQuote(Guid orderId, Guid quoteId, SaveTransportQuoteRequest request, CancellationToken cancellationToken) => await commands.UpdateQuoteAsync(orderId, quoteId, request, cancellationToken) is { } quote ? Ok(quote) : NotFound();
+    [HttpDelete("{orderId:guid}/quotes/{quoteId:guid}"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteQuote(Guid orderId, Guid quoteId, [FromQuery] uint version, CancellationToken cancellationToken) => await commands.DeleteQuoteAsync(orderId, quoteId, version, cancellationToken) ? NoContent() : NotFound();
 }

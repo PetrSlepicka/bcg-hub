@@ -12,7 +12,6 @@ if "%RADIXAL_CLUSTER_CONFIG%"=="" (
 )
 
 echo Building UI locally...
-set "VITE_API_BASE=/bcg-hub/api"
 call npm run build
 if errorlevel 1 goto fail
 

@@ -16,6 +16,8 @@ public interface IEntityResource
     Communication? Communication { get; set; }
     Guid? EmailMessageId { get; set; }
     EmailMessage? EmailMessage { get; set; }
+    Guid? ComplaintId { get; set; }
+    Complaint? Complaint { get; set; }
 }
 
 public sealed class Comment : Entity, IEntityResource
@@ -34,6 +36,8 @@ public sealed class Comment : Entity, IEntityResource
     public Communication? Communication { get; set; }
     public Guid? EmailMessageId { get; set; }
     public EmailMessage? EmailMessage { get; set; }
+    public Guid? ComplaintId { get; set; }
+    public Complaint? Complaint { get; set; }
     public string AuthorName { get; set; } = "";
     public string Text { get; set; } = "";
 }
@@ -54,6 +58,8 @@ public sealed class Attachment : Entity, IEntityResource
     public Communication? Communication { get; set; }
     public Guid? EmailMessageId { get; set; }
     public EmailMessage? EmailMessage { get; set; }
+    public Guid? ComplaintId { get; set; }
+    public Complaint? Complaint { get; set; }
     public string FileName { get; set; } = "";
     public string ContentType { get; set; } = "application/octet-stream";
     public long Size { get; set; }

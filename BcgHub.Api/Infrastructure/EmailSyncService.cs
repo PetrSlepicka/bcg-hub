@@ -4,14 +4,19 @@ using MailKit;
 using MailKit.Net.Imap;
 using MailKit.Search;
 using Microsoft.EntityFrameworkCore;
+using MimeKit;
 
 namespace BcgHub.Api.Infrastructure;
 
-public sealed class EmailSyncService(BcgHubDbContext db, CurrentUserAccessor currentUser, EmailSettingsService settingsService, IEmailSyncLock syncLock) : IEmailSyncService
+public sealed class EmailSyncService(BcgHubDbContext db, CurrentUserAccessor currentUser, EmailSettingsService settingsService, IEmailSyncLock syncLock, IFileStorage fileStorage, IEmailProcessor emailProcessor) : IEmailSyncService
 {
     public async Task<int> SyncAsync(CancellationToken cancellationToken)
     {
-        var userId = currentUser.UserId;
+        return await SyncUserAsync(currentUser.UserId, cancellationToken);
+    }
+
+    public async Task<int> SyncUserAsync(Guid userId, CancellationToken cancellationToken)
+    {
         await using var lease = await syncLock.AcquireAsync(userId, cancellationToken);
         var settings = await db.EmailAccountSettings.SingleOrDefaultAsync(x => x.UserAccountId == userId && x.IsActive, cancellationToken) ?? throw new DomainValidationException("Nejdříve nastavte aktivní e-mailovou schránku.");
         using var client = new ImapClient();
@@ -21,7 +26,6 @@ public sealed class EmailSyncService(BcgHubDbContext db, CurrentUserAccessor cur
         await inbox.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
         var uids = await inbox.SearchAsync(SearchQuery.DeliveredAfter(DateTime.UtcNow.AddDays(-30)), cancellationToken);
         var existing = await db.EmailMessages.Where(x => x.UserAccountId == userId).Select(x => x.ExternalId).ToHashSetAsync(cancellationToken);
-        var matcher = await EmailMatcher.LoadAsync(db, cancellationToken);
         var imported = 0;
         foreach (var uid in uids.OrderByDescending(x => x.Id).Take(200))
         {
@@ -29,8 +33,10 @@ public sealed class EmailSyncService(BcgHubDbContext db, CurrentUserAccessor cur
             var externalId = string.IsNullOrWhiteSpace(message.MessageId) ? $"INBOX:{uid.Id}" : message.MessageId;
             if (existing.Contains(externalId)) continue;
             var from = message.From.Mailboxes.FirstOrDefault();
-            var match = matcher.Match(from?.Address, message.Subject);
-            db.EmailMessages.Add(new EmailMessage { UserAccountId = userId, Direction = EmailDirection.Inbound, ExternalId = externalId, ImapUid = uid.Id, FromAddress = from?.Address ?? "", FromName = from?.Name, ToAddress = string.Join(", ", message.To.Mailboxes.Select(x => x.Address)), CcAddress = string.Join(", ", message.Cc.Mailboxes.Select(x => x.Address)), Subject = message.Subject ?? "(bez předmětu)", BodyText = message.TextBody, BodyHtml = message.HtmlBody, OccurredAtUtc = message.Date.UtcDateTime, HasAttachments = message.Attachments.Any(), BusinessPartnerId = match.BusinessPartnerId, OrderId = match.OrderId });
+            var email = new EmailMessage { UserAccountId = userId, Direction = EmailDirection.Inbound, ExternalId = externalId, ImapUid = uid.Id, FromAddress = from?.Address ?? "", FromName = from?.Name, ToAddress = string.Join(", ", message.To.Mailboxes.Select(x => x.Address)), CcAddress = string.Join(", ", message.Cc.Mailboxes.Select(x => x.Address)), Subject = message.Subject ?? "(bez předmětu)", BodyText = message.TextBody, BodyHtml = message.HtmlBody, OccurredAtUtc = message.Date.UtcDateTime, HasAttachments = message.Attachments.Any() };
+            await emailProcessor.ProcessAsync(email, cancellationToken);
+            db.EmailMessages.Add(email);
+            foreach (var attachment in message.Attachments) await ImportAttachmentAsync(email, attachment, cancellationToken);
             existing.Add(externalId);
             imported++;
         }
@@ -38,25 +44,18 @@ public sealed class EmailSyncService(BcgHubDbContext db, CurrentUserAccessor cur
         await client.DisconnectAsync(true, cancellationToken);
         return imported;
     }
-}
 
-internal sealed class EmailMatcher(IReadOnlyList<EmailMatcher.PartnerAddress> addresses, IReadOnlyList<EmailMatcher.OrderNumber> orders)
-{
-    public sealed record MatchResult(Guid? BusinessPartnerId, Guid? OrderId);
-    public sealed record PartnerAddress(Guid PartnerId, string Email);
-    public sealed record OrderNumber(Guid OrderId, string Number);
-
-    public static async Task<EmailMatcher> LoadAsync(BcgHubDbContext db, CancellationToken cancellationToken)
+    private async Task ImportAttachmentAsync(EmailMessage email, MimeEntity entity, CancellationToken cancellationToken)
     {
-        var partnerAddresses = await db.BusinessPartners.AsNoTracking().Where(x => x.Email != null).Select(x => new PartnerAddress(x.Id, x.Email!)).Concat(db.ContactPeople.AsNoTracking().Where(x => x.Email != null).Select(x => new PartnerAddress(x.BusinessPartnerId, x.Email!))).ToListAsync(cancellationToken);
-        var orderNumbers = await db.Orders.AsNoTracking().Select(x => new OrderNumber(x.Id, x.Number)).ToListAsync(cancellationToken);
-        return new EmailMatcher(partnerAddresses, orderNumbers);
-    }
-
-    public MatchResult Match(string? sender, string? subject)
-    {
-        var partnerId = addresses.FirstOrDefault(x => string.Equals(x.Email, sender, StringComparison.OrdinalIgnoreCase))?.PartnerId;
-        var orderId = orders.FirstOrDefault(x => subject?.Contains(x.Number, StringComparison.OrdinalIgnoreCase) == true)?.OrderId;
-        return new MatchResult(partnerId, orderId);
+        await using var stream = new MemoryStream();
+        string fileName;
+        string contentType;
+        if (entity is MimePart part && part.Content is { } content) { await content.DecodeToAsync(stream, cancellationToken); fileName = string.IsNullOrWhiteSpace(part.FileName) ? "priloha.bin" : part.FileName; contentType = part.ContentType.MimeType; }
+        else if (entity is MessagePart messagePart && messagePart.Message is { } message) { await message.WriteToAsync(stream, cancellationToken); fileName = messagePart.ContentDisposition?.Parameters["filename"] ?? "priloha.eml"; contentType = "message/rfc822"; }
+        else return;
+        if (stream.Length > 2 * 1024 * 1024) return;
+        stream.Position = 0;
+        var key = await fileStorage.SaveAsync(fileName, stream, cancellationToken);
+        db.Attachments.Add(new Attachment { EmailMessageId = email.Id, FileName = fileName, ContentType = contentType, Size = stream.Length, StorageKey = key });
     }
 }

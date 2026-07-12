@@ -28,6 +28,10 @@ spec:
               value: "/bcg-hub"
             - name: ASPNETCORE_ENVIRONMENT
               value: "Production"
+            - name: ASPNETCORE_FORWARDEDHEADERS_ENABLED
+              value: "true"
+            - name: AllowedHosts
+              value: "dev.radixal.net"
             - name: ConnectionStrings__DefaultConnection
               valueFrom:
                 secretKeyRef:
@@ -35,3 +39,36 @@ spec:
                   key: DB
             - name: Cors__Origins__0
               value: "https://dev.radixal.net"
+            - name: Cors__Origins__1
+              value: "http://localhost:5173"
+            - name: Cors__Origins__2
+              value: "http://127.0.0.1:5173"
+            - name: DataProtection__KeysPath
+              value: "/var/bcg-hub/keys"
+            - name: GoogleDrive__ClientId
+              valueFrom:
+                secretKeyRef:
+                  name: bcg-hub-secrets
+                  key: GoogleDriveClientId
+            - name: GoogleDrive__ClientSecret
+              valueFrom:
+                secretKeyRef:
+                  name: bcg-hub-secrets
+                  key: GoogleDriveClientSecret
+            - name: GoogleDrive__RefreshToken
+              valueFrom:
+                secretKeyRef:
+                  name: bcg-hub-secrets
+                  key: GoogleDriveRefreshToken
+            - name: GoogleDrive__RootFolderId
+              valueFrom:
+                secretKeyRef:
+                  name: bcg-hub-secrets
+                  key: GoogleDriveRootFolderId
+          volumeMounts:
+            - name: data-protection-keys
+              mountPath: /var/bcg-hub/keys
+      volumes:
+        - name: data-protection-keys
+          persistentVolumeClaim:
+            claimName: bcg-hub-data-protection-keys

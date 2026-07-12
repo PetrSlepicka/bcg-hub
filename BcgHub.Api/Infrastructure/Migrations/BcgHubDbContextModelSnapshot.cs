@@ -34,6 +34,9 @@ namespace BcgHub.Api.Infrastructure.Migrations
                     b.Property<Guid?>("CommunicationId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ComplaintId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("ContactPersonId")
                         .HasColumnType("uuid");
 
@@ -80,6 +83,8 @@ namespace BcgHub.Api.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ComplaintId");
 
                     b.HasIndex("BusinessPartnerId", "CreatedAtUtc");
 
@@ -197,6 +202,9 @@ namespace BcgHub.Api.Infrastructure.Migrations
                     b.Property<Guid?>("CommunicationId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ComplaintId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("ContactPersonId")
                         .HasColumnType("uuid");
 
@@ -230,6 +238,8 @@ namespace BcgHub.Api.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ComplaintId");
 
                     b.HasIndex("BusinessPartnerId", "CreatedAtUtc");
 
@@ -326,6 +336,51 @@ namespace BcgHub.Api.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("BcgHub.Api.Domain.Complaint", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(10000)
+                        .HasColumnType("character varying(10000)");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("ReportedOn")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("Status", "ReportedOn");
+
+                    b.ToTable("Complaints");
+                });
+
             modelBuilder.Entity("BcgHub.Api.Domain.ContactPerson", b =>
                 {
                     b.Property<Guid>("Id")
@@ -410,6 +465,36 @@ namespace BcgHub.Api.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("ProtectedSmtpPassword")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("SenderAddress")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("SenderName")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int>("SmtpPort")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SmtpServer")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<bool>("SmtpUseSsl")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("SmtpUsername")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
 
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -524,6 +609,49 @@ namespace BcgHub.Api.Infrastructure.Migrations
                     b.HasIndex("UserAccountId", "OccurredAtUtc");
 
                     b.ToTable("EmailMessages");
+                });
+
+            modelBuilder.Entity("BcgHub.Api.Domain.EmailTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BodyHtml")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserAccountId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("EmailTemplates");
                 });
 
             modelBuilder.Entity("BcgHub.Api.Domain.Order", b =>
@@ -788,6 +916,10 @@ namespace BcgHub.Api.Infrastructure.Migrations
                         .HasForeignKey("CommunicationId")
                         .OnDelete(DeleteBehavior.Cascade);
 
+                    b.HasOne("BcgHub.Api.Domain.Complaint", "Complaint")
+                        .WithMany()
+                        .HasForeignKey("ComplaintId");
+
                     b.HasOne("BcgHub.Api.Domain.ContactPerson", "ContactPerson")
                         .WithMany()
                         .HasForeignKey("ContactPersonId")
@@ -816,6 +948,8 @@ namespace BcgHub.Api.Infrastructure.Migrations
                     b.Navigation("BusinessPartner");
 
                     b.Navigation("Communication");
+
+                    b.Navigation("Complaint");
 
                     b.Navigation("ContactPerson");
 
@@ -840,6 +974,10 @@ namespace BcgHub.Api.Infrastructure.Migrations
                         .HasForeignKey("CommunicationId")
                         .OnDelete(DeleteBehavior.Cascade);
 
+                    b.HasOne("BcgHub.Api.Domain.Complaint", "Complaint")
+                        .WithMany()
+                        .HasForeignKey("ComplaintId");
+
                     b.HasOne("BcgHub.Api.Domain.ContactPerson", "ContactPerson")
                         .WithMany()
                         .HasForeignKey("ContactPersonId")
@@ -868,6 +1006,8 @@ namespace BcgHub.Api.Infrastructure.Migrations
                     b.Navigation("BusinessPartner");
 
                     b.Navigation("Communication");
+
+                    b.Navigation("Complaint");
 
                     b.Navigation("ContactPerson");
 
@@ -893,6 +1033,25 @@ namespace BcgHub.Api.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("BusinessPartner");
+
+                    b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("BcgHub.Api.Domain.Complaint", b =>
+                {
+                    b.HasOne("BcgHub.Api.Domain.BusinessPartner", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BcgHub.Api.Domain.Order", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
 
                     b.Navigation("Order");
                 });
@@ -940,6 +1099,17 @@ namespace BcgHub.Api.Infrastructure.Migrations
                     b.Navigation("BusinessPartner");
 
                     b.Navigation("Order");
+
+                    b.Navigation("UserAccount");
+                });
+
+            modelBuilder.Entity("BcgHub.Api.Domain.EmailTemplate", b =>
+                {
+                    b.HasOne("BcgHub.Api.Domain.UserAccount", "UserAccount")
+                        .WithMany()
+                        .HasForeignKey("UserAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("UserAccount");
                 });
