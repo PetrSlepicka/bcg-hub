@@ -27,7 +27,7 @@ public sealed class EmailSender(BcgHubDbContext db, CurrentUserAccessor currentU
         if (replyTo is not null && replyTo.ExternalId.StartsWith('<') && replyTo.ExternalId.EndsWith('>')) { message.InReplyTo = replyTo.ExternalId; message.References.Add(replyTo.ExternalId); }
 
         using var client = new SmtpClient();
-        await client.ConnectAsync(settings.SmtpServer, settings.SmtpPort, SecureSocketOptions.Auto, cancellationToken);
+        await client.ConnectAsync(settings.SmtpServer, settings.SmtpPort, settings.SmtpPort == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls, cancellationToken);
         await client.AuthenticateAsync(settings.SmtpUsername, settingsService.UnprotectSmtpPassword(settings), cancellationToken);
         await client.SendAsync(message, cancellationToken);
         await client.DisconnectAsync(true, cancellationToken);

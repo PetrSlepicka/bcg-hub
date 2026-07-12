@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { ApiError, api } from "../../api";
 import type { OrderDetail, OrderListItem, WorkflowStep, WorkflowStepStatus } from "../../domain";
 
-export function useOrdersWorkspace() {
-  const requestedEntityId = new URLSearchParams(window.location.search).get("entityId") ?? undefined;
+export function useOrdersWorkspace(requestedEntityId?: string, onSelectedEntityIdChange?: (id?: string) => void) {
   const [orders, setOrders] = useState<OrderListItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -17,6 +16,8 @@ export function useOrdersWorkspace() {
   const [error, setError] = useState<string>();
   const [updatingSteps, setUpdatingSteps] = useState<ReadonlySet<string>>(new Set());
   const [refreshToken, setRefreshToken] = useState(0);
+
+  useEffect(() => { if (requestedEntityId) setSelectedId(requestedEntityId); }, [requestedEntityId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -34,6 +35,8 @@ export function useOrdersWorkspace() {
     api.orders.detail(requestedId, controller.signal).then(order => setDetail(current => requestedId === selectedId || current?.id === requestedId ? order : current)).catch(caught => { if (caught?.name !== "AbortError") setError("Detail zakázky se nepodařilo načíst."); });
     return () => controller.abort();
   }, [selectedId]);
+
+  useEffect(() => { onSelectedEntityIdChange?.(selectedId); }, [selectedId]);
 
   const updateStep = async (step: WorkflowStep, status: WorkflowStepStatus) => {
     const orderId = detail?.id;

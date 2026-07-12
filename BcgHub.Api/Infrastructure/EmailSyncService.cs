@@ -51,8 +51,8 @@ public sealed class EmailSyncService(BcgHubDbContext db, CurrentUserAccessor cur
         await using var stream = new MemoryStream();
         string fileName;
         string contentType;
-        if (entity is MimePart part && part.Content is { } content) { await content.DecodeToAsync(stream, cancellationToken); fileName = string.IsNullOrWhiteSpace(part.FileName) ? "priloha.bin" : part.FileName; contentType = part.ContentType.MimeType; }
-        else if (entity is MessagePart messagePart && messagePart.Message is { } message) { await message.WriteToAsync(stream, cancellationToken); fileName = messagePart.ContentDisposition?.Parameters["filename"] ?? "priloha.eml"; contentType = "message/rfc822"; }
+        if (entity is MimePart part && part.Content is { } content) { var source = content.Stream; if (part.ContentDisposition?.Size > 2 * 1024 * 1024 || source is { CanSeek: true } && source.Length > 3 * 1024 * 1024) return; await content.DecodeToAsync(stream, cancellationToken); fileName = string.IsNullOrWhiteSpace(part.FileName) ? "priloha.bin" : part.FileName; contentType = part.ContentType.MimeType; }
+        else if (entity is MessagePart messagePart && messagePart.Message is { } message) { if (messagePart.ContentDisposition?.Size > 2 * 1024 * 1024) return; await message.WriteToAsync(stream, cancellationToken); fileName = messagePart.ContentDisposition?.Parameters["filename"] ?? "priloha.eml"; contentType = "message/rfc822"; }
         else return;
         if (stream.Length > 2 * 1024 * 1024) return;
         stream.Position = 0;

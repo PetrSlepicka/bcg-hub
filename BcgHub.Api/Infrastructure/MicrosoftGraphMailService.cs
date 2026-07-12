@@ -80,8 +80,11 @@ public sealed class MicrosoftGraphMailService(BcgHubDbContext db, MicrosoftGraph
         foreach (var attachment in document.RootElement.GetProperty("value").EnumerateArray())
         {
             if (attachment.TryGetProperty("isInline", out var inline) && inline.GetBoolean()) continue;
+            if (attachment.TryGetProperty("size", out var declaredSize) && declaredSize.GetInt64() > 2 * 1024 * 1024) continue;
             if (!attachment.TryGetProperty("contentBytes", out var contentBytes) || string.IsNullOrWhiteSpace(contentBytes.GetString())) continue;
-            var bytes = Convert.FromBase64String(contentBytes.GetString()!);
+            var encodedContent = contentBytes.GetString()!;
+            if (encodedContent.Length > 2_796_208) continue;
+            var bytes = Convert.FromBase64String(encodedContent);
             if (bytes.Length > 2 * 1024 * 1024) continue;
             var fileName = attachment.TryGetProperty("name", out var name) ? name.GetString() ?? "priloha.bin" : "priloha.bin";
             var contentType = attachment.TryGetProperty("contentType", out var type) ? type.GetString() ?? "application/octet-stream" : "application/octet-stream";

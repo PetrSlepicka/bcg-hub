@@ -7,8 +7,8 @@ import { OrderListPane } from "./OrderListPane";
 import { PohodaImportModal } from "./PohodaImportModal";
 import { useOrdersWorkspace } from "./useOrdersWorkspace";
 
-export function OrdersWorkspace({ initialCustomerId, onInitialCreateHandled, onInitialOrderCreated, onInitialCreateCancelled }: { initialCustomerId?: string; onInitialCreateHandled?: () => void; onInitialOrderCreated?: (order: OrderDetail) => Promise<void>; onInitialCreateCancelled?: () => void }) {
-  const state = useOrdersWorkspace();
+export function OrdersWorkspace({ requestedEntityId, onSelectedEntityIdChange, initialCustomerId, onInitialCreateHandled, onInitialOrderCreated, onInitialCreateCancelled }: { requestedEntityId?: string; onSelectedEntityIdChange?: (id?: string) => void; initialCustomerId?: string; onInitialCreateHandled?: () => void; onInitialOrderCreated?: (order: OrderDetail) => Promise<void>; onInitialCreateCancelled?: () => void }) {
+  const state = useOrdersWorkspace(requestedEntityId, onSelectedEntityIdChange);
   const [editing, setEditing] = useState<"new" | "edit" | undefined>(initialCustomerId !== undefined ? "new" : undefined);
   const [automationError, setAutomationError] = useState<string>();
   const [pohodaImportOpen, setPohodaImportOpen] = useState(false);

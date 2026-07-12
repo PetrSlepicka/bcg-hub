@@ -13,14 +13,15 @@ import { PartnerContactsTable } from "./PartnerContactsTable";
 const empty = (type: PartnerType): SavePartner => ({ type, name: "", version: 0 });
 const transportCapabilities = [{ value: "Road", label: "Silniční doprava", terms: ["road", "pozem", "silni"] }, { value: "Sea", label: "Námořní doprava", terms: ["sea", "námoř", "namor"] }, { value: "Air", label: "Letecká doprava", terms: ["air", "letec"] }];
 
-export function PartnerWorkspace({ type, title, initialDraft, onInitialDraftHandled, onInitialDraftSaved, onInitialDraftCancelled }: { type: PartnerType; title: string; initialDraft?: SavePartner; onInitialDraftHandled?: () => void; onInitialDraftSaved?: (partner: PartnerDetail) => Promise<void>; onInitialDraftCancelled?: () => void }) {
-  const requestedEntityId = new URLSearchParams(window.location.search).get("entityId") ?? undefined;
+export function PartnerWorkspace({ type, title, requestedEntityId, onSelectedEntityIdChange, initialDraft, onInitialDraftHandled, onInitialDraftSaved, onInitialDraftCancelled }: { type: PartnerType; title: string; requestedEntityId?: string; onSelectedEntityIdChange?: (id?: string) => void; initialDraft?: SavePartner; onInitialDraftHandled?: () => void; onInitialDraftSaved?: (partner: PartnerDetail) => Promise<void>; onInitialDraftCancelled?: () => void }) {
   const [items, setItems] = useState<PartnerListItem[]>([]); const [selectedId, setSelectedId] = useState<string | undefined>(requestedEntityId); const [detail, setDetail] = useState<PartnerDetail>(); const [search, setSearch] = useState(""); const [sortBy, setSortBy] = useState<keyof PartnerListItem>("name"); const [descending, setDescending] = useState(false); const [editing, setEditing] = useState<SavePartner | undefined>(initialDraft); const [error, setError] = useState<string>();
   const initialDraftPending = useRef(!!initialDraft);
   useEffect(() => { if (initialDraft) onInitialDraftHandled?.(); }, []);
+  useEffect(() => { if (requestedEntityId) setSelectedId(requestedEntityId); }, [requestedEntityId]);
   const load = () => api.partners.list(type, search).then(result => { setItems(result.items); setSelectedId(current => requestedEntityId && current === requestedEntityId ? current : current && result.items.some(x => x.id === current) ? current : result.items[0]?.id); });
   useEffect(() => { const timer = window.setTimeout(() => load().catch(() => setError("Seznam se nepodařilo načíst.")), 180); return () => window.clearTimeout(timer); }, [type, search]);
   useEffect(() => { if (!selectedId) { setDetail(undefined); return; } const controller = new AbortController(); api.partners.detail(selectedId, controller.signal).then(setDetail); return () => controller.abort(); }, [selectedId]);
+  useEffect(() => { onSelectedEntityIdChange?.(selectedId); }, [selectedId]);
   const sorted = useMemo(() => [...items].sort((a, b) => compare(a[sortBy], b[sortBy]) * (descending ? -1 : 1)), [items, sortBy, descending]);
   const sort = (key: keyof PartnerListItem) => { if (sortBy === key) setDescending(value => !value); else { setSortBy(key); setDescending(false); } };
   const save = async (value: SavePartner) => { const saved = value.version > 0 && detail ? await api.partners.update(detail.id, value) : await api.partners.create(value); if (initialDraftPending.current && onInitialDraftSaved) { initialDraftPending.current = false; try { await onInitialDraftSaved(saved); } catch { setError("Partner byl založen, ale e-mail se k němu nepodařilo automaticky přiřadit. Přiřaďte jej ručně v E-mailech."); } } setEditing(undefined); await load(); setSelectedId(saved.id); setDetail(saved); };
@@ -52,7 +53,7 @@ function CustomerOrders({ partnerId }: { partnerId: string }) {
   if (loading) return <div className="loader">Načítám zakázky…</div>;
   if (error) return <div className="error-banner">{error}</div>;
   if (!orders.length) return <div className="detail-placeholder"><p>Zákazník zatím nemá žádné zakázky.</p></div>;
-  return <div className="data-table-wrap customer-orders"><table className="data-table"><thead><tr><th>ID zakázky</th><th>Název zakázky</th><th>Datum přijetí</th><th>Stav</th></tr></thead><tbody>{orders.map(order => { const href = orderHref(order.id); return <tr key={order.id}><td><a href={href}><strong>{order.number}</strong></a></td><td><a href={href}>{order.title}</a></td><td><a href={href}>{order.orderedOn ? new Intl.DateTimeFormat("cs-CZ").format(new Date(`${order.orderedOn}T00:00:00`)) : "—"}</a></td><td><a href={href}>{orderStatusLabels[order.status]}</a></td></tr>; })}</tbody></table></div>;
+  return <div className="data-table-wrap customer-orders"><table className="data-table customer-orders-table"><thead><tr><th>ID zakázky</th><th>Název zakázky</th><th>Datum přijetí</th><th>Stav</th></tr></thead><tbody>{orders.map(order => { const href = orderHref(order.id); return <tr key={order.id}><td><a href={href}><strong>{order.number}</strong></a></td><td><a href={href}>{order.title}</a></td><td><a href={href}>{order.orderedOn ? new Intl.DateTimeFormat("cs-CZ").format(new Date(`${order.orderedOn}T00:00:00`)) : "—"}</a></td><td><a href={href}>{orderStatusLabels[order.status]}</a></td></tr>; })}</tbody></table></div>;
 }
 
 async function loadCustomerOrders(partnerId: string, signal: AbortSignal) {

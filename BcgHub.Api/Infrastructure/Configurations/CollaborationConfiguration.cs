@@ -41,7 +41,7 @@ public sealed class CollaborationConfiguration : IEntityTypeConfiguration<Commen
 
     private static void ConfigureResource<TEntity>(EntityTypeBuilder<TEntity> entity, string tableName) where TEntity : Entity, IEntityResource
     {
-        entity.ToTable(table => table.HasCheckConstraint($"CK_{tableName}_ExactlyOneOwner", "num_nonnulls(\"BusinessPartnerId\", \"ContactPersonId\", \"OrderId\", \"WorkflowStepId\", \"TransportQuoteId\", \"CommunicationId\", \"EmailMessageId\") = 1"));
+        entity.ToTable(table => table.HasCheckConstraint($"CK_{tableName}_ExactlyOneOwner", "num_nonnulls(\"BusinessPartnerId\", \"ContactPersonId\", \"OrderId\", \"WorkflowStepId\", \"TransportQuoteId\", \"CommunicationId\", \"EmailMessageId\", \"ComplaintId\") = 1"));
         entity.HasIndex(x => new { x.BusinessPartnerId, x.CreatedAtUtc });
         entity.HasIndex(x => new { x.ContactPersonId, x.CreatedAtUtc });
         entity.HasIndex(x => new { x.OrderId, x.CreatedAtUtc });
@@ -49,6 +49,7 @@ public sealed class CollaborationConfiguration : IEntityTypeConfiguration<Commen
         entity.HasIndex(x => new { x.TransportQuoteId, x.CreatedAtUtc });
         entity.HasIndex(x => new { x.CommunicationId, x.CreatedAtUtc });
         entity.HasIndex(x => new { x.EmailMessageId, x.CreatedAtUtc });
+        entity.HasIndex(x => new { x.ComplaintId, x.CreatedAtUtc });
         entity.HasOne(x => x.BusinessPartner).WithMany().HasForeignKey(x => x.BusinessPartnerId).OnDelete(DeleteBehavior.Cascade);
         entity.HasOne(x => x.ContactPerson).WithMany().HasForeignKey(x => x.ContactPersonId).OnDelete(DeleteBehavior.Cascade);
         entity.HasOne(x => x.Order).WithMany().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);

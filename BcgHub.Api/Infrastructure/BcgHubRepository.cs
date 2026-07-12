@@ -42,19 +42,27 @@ public sealed class BcgHubRepository(BcgHubDbContext db) : IOrderReadRepository,
 
     public async Task<OrderDetailDto?> GetDetailAsync(Guid id, CancellationToken cancellationToken)
     {
-        var order = await db.Orders.AsNoTracking().Include(x => x.Customer).Include(x => x.CustomerContact).Include(x => x.Warehouse).Include(x => x.Carrier).Include(x => x.CustomsDeclarant).Include(x => x.WorkflowSteps).Include(x => x.TransportQuotes).ThenInclude(x => x.Carrier).SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
-        return order is null ? null : MapDetail(order);
+        var header = await db.Orders.AsNoTracking().Where(x => x.Id == id).Select(x => new OrderDetailHeader(x.Id, x.Number, x.PohodaOrderNumber, x.Title, x.Status, new PartnerReference(x.Customer.Id, x.Customer.Name), x.CustomerContact != null ? x.CustomerContact.FullName : null, x.Warehouse != null ? new PartnerReference(x.Warehouse.Id, x.Warehouse.Name) : null, x.Carrier != null ? new PartnerReference(x.Carrier.Id, x.Carrier.Name) : null, x.CustomsDeclarant != null ? new PartnerReference(x.CustomsDeclarant.Id, x.CustomsDeclarant.Name) : null, x.OrderedOn, x.RequestedDeliveryOn, x.PlannedPickupOn, x.PlannedDeliveryOn, x.ValueCzk, x.WeightKg, x.VolumeM3, x.WarehouseInstructions, x.CustomerContactId, x.Version)).SingleOrDefaultAsync(cancellationToken);
+        if (header is null) return null;
+
+        var definitions = WorkflowCatalog.All.ToDictionary(x => x.Type);
+        var stepRows = await db.OrderWorkflowSteps.AsNoTracking().Where(x => x.OrderId == id).OrderBy(x => x.Type).Select(x => new { x.Id, x.Type, x.Status, x.DueAtUtc, x.CompletedAtUtc, x.Notes, x.Version }).ToListAsync(cancellationToken);
+        var steps = stepRows.Select(x => new WorkflowStepDto(x.Id, x.Type, definitions[x.Type].Title, definitions[x.Type].Description, x.Status, x.DueAtUtc, x.CompletedAtUtc, x.Notes, x.Version)).ToList();
+        var quotes = await db.TransportQuotes.AsNoTracking().Where(x => x.OrderId == id).OrderByDescending(x => x.IsSelected).ThenBy(x => x.Price).Select(x => new TransportQuoteDto(x.Id, new PartnerReference(x.Carrier.Id, x.Carrier.Name), x.Price, x.Currency, x.PickupOn, x.DeliveryOn, x.IsSelected, x.Notes, x.Version)).ToListAsync(cancellationToken);
+        return new OrderDetailDto(header.Id, header.Number, header.PohodaOrderNumber, header.Title, header.Status, header.Customer, header.CustomerContact, header.Warehouse, header.Carrier, header.CustomsDeclarant, header.OrderedOn, header.RequestedDeliveryOn, header.PlannedPickupOn, header.PlannedDeliveryOn, header.ValueCzk, header.WeightKg, header.VolumeM3, header.WarehouseInstructions, steps, quotes, header.CustomerContactId, header.Version);
     }
 
     public Task<bool> NumberExistsAsync(string number, CancellationToken cancellationToken) => db.Orders.AnyAsync(x => x.Number == number, cancellationToken);
 
     public async Task<OrderReferenceValidation> ValidateReferencesAsync(Guid customerId, Guid? contactId, Guid? warehouseId, Guid? carrierId, Guid? customsDeclarantId, CancellationToken cancellationToken)
     {
-        var customerIsValid = await db.BusinessPartners.AnyAsync(x => x.Id == customerId && x.Type == PartnerType.Customer, cancellationToken);
+        var partnerIds = new Guid?[] { customerId, warehouseId, carrierId, customsDeclarantId }.Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
+        var partnerTypes = await db.BusinessPartners.AsNoTracking().Where(x => partnerIds.Contains(x.Id)).Select(x => new { x.Id, x.Type }).ToDictionaryAsync(x => x.Id, x => x.Type, cancellationToken);
+        var customerIsValid = partnerTypes.GetValueOrDefault(customerId) == PartnerType.Customer;
         var contactMatches = contactId is null || await db.ContactPeople.AnyAsync(x => x.Id == contactId && x.BusinessPartnerId == customerId, cancellationToken);
-        var warehouseIsValid = warehouseId is null || await db.BusinessPartners.AnyAsync(x => x.Id == warehouseId && x.Type == PartnerType.Warehouse, cancellationToken);
-        var carrierIsValid = carrierId is null || await db.BusinessPartners.AnyAsync(x => x.Id == carrierId && x.Type == PartnerType.Carrier, cancellationToken);
-        var customsDeclarantIsValid = customsDeclarantId is null || await db.BusinessPartners.AnyAsync(x => x.Id == customsDeclarantId && x.Type == PartnerType.CustomsDeclarant, cancellationToken);
+        var warehouseIsValid = warehouseId is null || partnerTypes.GetValueOrDefault(warehouseId.Value) == PartnerType.Warehouse;
+        var carrierIsValid = carrierId is null || partnerTypes.GetValueOrDefault(carrierId.Value) == PartnerType.Carrier;
+        var customsDeclarantIsValid = customsDeclarantId is null || partnerTypes.GetValueOrDefault(customsDeclarantId.Value) == PartnerType.CustomsDeclarant;
         return new OrderReferenceValidation(customerIsValid, contactMatches, warehouseIsValid, carrierIsValid, customsDeclarantIsValid);
     }
 
@@ -90,19 +98,11 @@ public sealed class BcgHubRepository(BcgHubDbContext db) : IOrderReadRepository,
     }
 
     public async Task<IReadOnlySet<string>> FindExistingPohodaOrderIdsAsync(IEnumerable<string> externalIds, CancellationToken cancellationToken) => (await db.Orders.AsNoTracking().Where(x => x.PohodaOrderId != null && externalIds.Contains(x.PohodaOrderId)).Select(x => x.PohodaOrderId!).ToListAsync(cancellationToken)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-    public async Task<int> GetNextOrderSequenceAsync(int year, CancellationToken cancellationToken) { var prefix = $"BCG_{year}"; var numbers = await db.Orders.AsNoTracking().Where(x => x.Number.StartsWith(prefix)).Select(x => x.Number).ToListAsync(cancellationToken); return numbers.Select(x => int.TryParse(x[prefix.Length..], out var sequence) ? sequence : 0).DefaultIfEmpty().Max() + 1; }
+    public async Task<int> GetNextOrderSequenceAsync(int year, CancellationToken cancellationToken) { var prefix = $"BCG_{year}"; var number = await db.Orders.AsNoTracking().Where(x => x.Number.StartsWith(prefix) && x.Number.Length == prefix.Length + 4).OrderByDescending(x => x.Number).Select(x => x.Number).FirstOrDefaultAsync(cancellationToken); return number is not null && int.TryParse(number[prefix.Length..], out var sequence) ? sequence + 1 : 1; }
     public void AddImportedCustomer(BusinessPartner customer) => db.BusinessPartners.Add(customer);
     public void AddImportedOrder(Order order) => db.Orders.Add(order);
     public Task SaveImportAsync(CancellationToken cancellationToken) => SaveChangesAsync(cancellationToken);
 
-    private static OrderDetailDto MapDetail(Order order)
-    {
-        var definitions = WorkflowCatalog.All.ToDictionary(x => x.Type);
-        var steps = order.WorkflowSteps.OrderBy(x => x.Type).Select(x => new WorkflowStepDto(x.Id, x.Type, definitions[x.Type].Title, definitions[x.Type].Description, x.Status, x.DueAtUtc, x.CompletedAtUtc, x.Notes, x.Version)).ToList();
-        var quotes = order.TransportQuotes.OrderByDescending(x => x.IsSelected).ThenBy(x => x.Price).Select(x => new TransportQuoteDto(x.Id, new PartnerReference(x.Carrier.Id, x.Carrier.Name), x.Price, x.Currency, x.PickupOn, x.DeliveryOn, x.IsSelected, x.Notes, x.Version)).ToList();
-        return new OrderDetailDto(order.Id, order.Number, order.PohodaOrderNumber, order.Title, order.Status, new PartnerReference(order.Customer.Id, order.Customer.Name), order.CustomerContact?.FullName, ToReference(order.Warehouse), ToReference(order.Carrier), ToReference(order.CustomsDeclarant), order.OrderedOn, order.RequestedDeliveryOn, order.PlannedPickupOn, order.PlannedDeliveryOn, order.ValueCzk, order.WeightKg, order.VolumeM3, order.WarehouseInstructions, steps, quotes, order.CustomerContactId, order.Version);
-    }
-
-    private static PartnerReference? ToReference(BusinessPartner? partner) => partner is null ? null : new PartnerReference(partner.Id, partner.Name);
     private static string EscapeLike(string value) => value.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+    private sealed record OrderDetailHeader(Guid Id, string Number, string? PohodaOrderNumber, string Title, OrderStatus Status, PartnerReference Customer, string? CustomerContact, PartnerReference? Warehouse, PartnerReference? Carrier, PartnerReference? CustomsDeclarant, DateOnly? OrderedOn, DateOnly? RequestedDeliveryOn, DateOnly? PlannedPickupOn, DateOnly? PlannedDeliveryOn, decimal ValueCzk, decimal WeightKg, decimal VolumeM3, string? WarehouseInstructions, Guid? CustomerContactId, uint Version);
 }

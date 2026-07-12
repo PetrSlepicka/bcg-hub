@@ -2,6 +2,7 @@ import type { AttachmentItem, CommentItem, Communication, ComplaintDetail, Compl
 
 const apiRoot = "https://dev.radixal.net/bcg-hub/api";
 let csrfTokenPromise: Promise<string> | undefined;
+export const unauthorizedEvent = "bcg-hub:unauthorized";
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
@@ -21,6 +22,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (init.body && !(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
   if (!["GET", "HEAD", "OPTIONS"].includes(method)) headers.set("X-CSRF-TOKEN", await getCsrfToken());
   const response = await fetch(`${apiRoot}${path}`, { ...init, headers, credentials: "include" });
+  if (response.status === 401 && path !== "/auth/login") { csrfTokenPromise = undefined; window.dispatchEvent(new Event(unauthorizedEvent)); }
   if (!response.ok)
   {
     const payload = await response.json().catch(() => undefined) as { message?: string } | undefined;

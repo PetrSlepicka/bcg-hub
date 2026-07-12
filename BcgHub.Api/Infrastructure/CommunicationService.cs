@@ -14,8 +14,8 @@ public sealed class CommunicationService(BcgHubDbContext db, CurrentUserAccessor
         var communications = await db.Communications.AsNoTracking().Where(x => (!partnerId.HasValue || x.BusinessPartnerId == partnerId) && (!orderId.HasValue || x.OrderId == orderId)).Select(x => new CommunicationDto(x.Id, x.Type, x.BusinessPartnerId, x.OrderId, x.Subject, x.BodyPreview, x.Sender, x.Recipients, x.OccurredAtUtc, x.Version)).ToListAsync(cancellationToken);
         var emailQuery = db.EmailMessages.AsNoTracking().Where(x => x.UserAccountId == currentUser.UserId && ((!partnerId.HasValue || x.BusinessPartnerId == partnerId) && (!orderId.HasValue || x.OrderId == orderId)));
         foreach (var address in addresses) emailQuery = emailQuery.Union(db.EmailMessages.AsNoTracking().Where(x => x.UserAccountId == currentUser.UserId && (x.FromAddress.ToLower() == address || x.ToAddress.ToLower().Contains(address) || (x.CcAddress != null && x.CcAddress.ToLower().Contains(address)))));
-        var emailRows = await emailQuery.ToListAsync(cancellationToken);
-        var emails = emailRows.Where(x => IsExplicitlyLinked(x, partnerId, orderId) || addresses.Contains(x.FromAddress.Trim().ToLowerInvariant()) || RecipientContains(x.ToAddress, addresses) || RecipientContains(x.CcAddress, addresses)).Select(x => new CommunicationDto(x.Id, CommunicationType.Email, x.BusinessPartnerId, x.OrderId, x.Subject, Preview(x.BodyText), x.FromAddress, x.ToAddress, x.OccurredAtUtc, x.Version)).ToList();
+        var emailRows = await emailQuery.Select(x => new EmailCommunicationRow(x.Id, x.BusinessPartnerId, x.OrderId, x.Subject, x.BodyText, x.FromAddress, x.ToAddress, x.CcAddress, x.OccurredAtUtc, x.Version)).ToListAsync(cancellationToken);
+        var emails = emailRows.Where(x => IsExplicitlyLinked(x.BusinessPartnerId, x.OrderId, partnerId, orderId) || addresses.Contains(x.FromAddress.Trim().ToLowerInvariant()) || RecipientContains(x.ToAddress, addresses) || RecipientContains(x.CcAddress, addresses)).Select(x => new CommunicationDto(x.Id, CommunicationType.Email, x.BusinessPartnerId, x.OrderId, x.Subject, Preview(x.BodyText), x.FromAddress, x.ToAddress, x.OccurredAtUtc, x.Version)).ToList();
         var allItems = communications.Concat(emails).OrderByDescending(x => x.OccurredAtUtc).ThenBy(x => x.Id).ToList();
         return new PagedResult<CommunicationDto>(allItems.Skip((page - 1) * pageSize).Take(pageSize).ToList(), page, pageSize, allItems.Count);
     }
@@ -32,8 +32,9 @@ public sealed class CommunicationService(BcgHubDbContext db, CurrentUserAccessor
         var addresses = await db.BusinessPartners.AsNoTracking().Where(x => x.Id == partnerId && x.Email != null).Select(x => x.Email!).Concat(db.ContactPeople.AsNoTracking().Where(x => x.BusinessPartnerId == partnerId && x.Email != null).Select(x => x.Email!)).ToListAsync(cancellationToken);
         return addresses.Select(x => x.Trim().ToLowerInvariant()).Where(x => x.Length > 0).Distinct().ToList();
     }
-    private static bool IsExplicitlyLinked(EmailMessage email, Guid? partnerId, Guid? orderId) => (!partnerId.HasValue || email.BusinessPartnerId == partnerId) && (!orderId.HasValue || email.OrderId == orderId);
+    private static bool IsExplicitlyLinked(Guid? emailPartnerId, Guid? emailOrderId, Guid? partnerId, Guid? orderId) => (!partnerId.HasValue || emailPartnerId == partnerId) && (!orderId.HasValue || emailOrderId == orderId);
     private static bool RecipientContains(string? recipients, IReadOnlyCollection<string> addresses) => !string.IsNullOrWhiteSpace(recipients) && recipients.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(x => x.ToLowerInvariant()).Any(addresses.Contains);
     private static string? Preview(string? value) => value is null || value.Length <= 1000 ? value : value[..1000] + "…";
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private sealed record EmailCommunicationRow(Guid Id, Guid? BusinessPartnerId, Guid? OrderId, string Subject, string? BodyText, string FromAddress, string ToAddress, string? CcAddress, DateTime OccurredAtUtc, uint Version);
 }
