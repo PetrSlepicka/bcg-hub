@@ -6,7 +6,7 @@ public sealed record OrderReferenceValidation(bool CustomerIsValid, bool Contact
 
 public interface IOrderReadRepository
 {
-    Task<PagedResult<OrderListItem>> GetListAsync(string? search, string sortBy, bool descending, int page, int pageSize, Guid? customerId, CancellationToken cancellationToken);
+    Task<PagedResult<OrderListItem>> GetListAsync(string? search, string sortBy, bool descending, int page, int pageSize, Guid? customerId, OrderSalesChannel salesChannel, CancellationToken cancellationToken);
     Task<OrderDetailDto?> GetDetailAsync(Guid id, CancellationToken cancellationToken);
 }
 
@@ -31,7 +31,7 @@ public interface IOrderWriteRepository
 
 public interface IOrderQueryService
 {
-    Task<PagedResult<OrderListItem>> GetListAsync(string? search, string sortBy, bool descending, int page, int pageSize, Guid? customerId, CancellationToken cancellationToken);
+    Task<PagedResult<OrderListItem>> GetListAsync(string? search, string sortBy, bool descending, int page, int pageSize, Guid? customerId, OrderSalesChannel salesChannel, CancellationToken cancellationToken);
     Task<OrderDetailDto?> GetDetailAsync(Guid id, CancellationToken cancellationToken);
 }
 
@@ -49,7 +49,7 @@ public interface IOrderCommandService
 public interface IPohodaImportRepository
 {
     Task<IReadOnlyDictionary<string, Guid>> FindCustomersAsync(IEnumerable<PohodaCustomerData> customers, CancellationToken cancellationToken);
-    Task<IReadOnlySet<string>> FindExistingPohodaOrderIdsAsync(IEnumerable<string> externalIds, CancellationToken cancellationToken);
+    Task<IReadOnlyDictionary<string, Order>> FindExistingPohodaOrdersAsync(IEnumerable<string> externalIds, CancellationToken cancellationToken);
     Task<int> GetNextOrderSequenceAsync(int year, CancellationToken cancellationToken);
     void AddImportedCustomer(BusinessPartner customer);
     void AddImportedOrder(Order order);
@@ -60,6 +60,13 @@ public interface IPohodaOrderImportService
 {
     Task<PohodaImportPreview> PreviewAsync(Stream xml, CancellationToken cancellationToken);
     Task<PohodaImportResult> ImportAsync(Stream xml, CancellationToken cancellationToken);
+    Task<PohodaImportResult> ImportMServerResponseAsync(Stream xml, string companyNumber, CancellationToken cancellationToken);
+}
+
+public interface IPohodaSyncService
+{
+    Task<PohodaSyncResult> SyncAsync(string trigger, CancellationToken cancellationToken);
+    Task<PohodaSyncStatus> GetStatusAsync(CancellationToken cancellationToken);
 }
 
 public interface IPartnerService
@@ -136,12 +143,23 @@ public interface IEmailProcessor
     Task<EmailActionContextDto> GetActionContextAsync(EmailMessage email, CancellationToken cancellationToken);
 }
 
-public enum EmailSenderMatchKind { None, Address, Domain, Ambiguous }
-public sealed record EmailSenderMatch(BusinessPartner? Partner, EmailSenderMatchKind Kind);
+public enum EmailSenderMatchKind { None, Address, Domain }
+public sealed record EmailSenderMatch(IReadOnlyList<BusinessPartner> Partners, EmailSenderMatchKind Kind)
+{
+    public BusinessPartner? Partner => Partners.Count == 1 ? Partners[0] : null;
+    public bool IsAmbiguous => Partners.Count > 1;
+}
+
+public sealed record EmailPartnerSuggestionResult(BusinessPartner? PreferredPartner, string MatchedBy, IReadOnlyList<BusinessPartner> Candidates);
 
 public interface IEmailSenderResolver
 {
     Task<EmailSenderMatch> ResolveAsync(string address, CancellationToken cancellationToken);
+}
+
+public interface IEmailPartnerSuggestionService
+{
+    Task<EmailPartnerSuggestionResult> ResolveAsync(EmailMessage email, CancellationToken cancellationToken);
 }
 
 public interface IEmailSender

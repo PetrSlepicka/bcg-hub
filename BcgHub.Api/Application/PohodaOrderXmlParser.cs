@@ -8,22 +8,23 @@ namespace BcgHub.Api.Application;
 public sealed record PohodaCustomerData(string Name, string? CompanyNumber, string? VatNumber, string? Email, string? Phone, string? Street, string? City, string? PostalCode, string? CountryCode);
 public sealed record PohodaOrderData(string ExternalId, string? Number, string Title, string OrderType, PohodaCustomerData Customer, DateOnly? OrderedOn, DateOnly? DeliveryOn, decimal ValueCzk);
 
-public interface IPohodaOrderXmlParser { IReadOnlyList<PohodaOrderData> Parse(Stream xml); }
+public interface IPohodaOrderXmlParser { IReadOnlyList<PohodaOrderData> Parse(Stream xml, string? accountingUnitFallback = null, bool allowEmpty = false); }
 
 public sealed class PohodaOrderXmlParser : IPohodaOrderXmlParser
 {
     static PohodaOrderXmlParser() => Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
-    public IReadOnlyList<PohodaOrderData> Parse(Stream xml)
+    public IReadOnlyList<PohodaOrderData> Parse(Stream xml, string? accountingUnitFallback = null, bool allowEmpty = false)
     {
         try
         {
             using var reader = XmlReader.Create(xml, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = 250_000_000 });
             var orders = new List<PohodaOrderData>();
-            string? accountingUnit = null;
+            var accountingUnit = accountingUnitFallback;
             while (!reader.EOF)
             {
-                if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "responsePack") accountingUnit = reader.GetAttribute("ico");
+                if (reader.NodeType == XmlNodeType.Element && string.Equals(reader.GetAttribute("state"), "error", StringComparison.OrdinalIgnoreCase)) throw ResponseError((XElement)XNode.ReadFrom(reader));
+                if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "responsePack" && !string.IsNullOrWhiteSpace(reader.GetAttribute("ico"))) accountingUnit = reader.GetAttribute("ico");
                 if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "order")
                 {
                     var order = (XElement)XNode.ReadFrom(reader);
@@ -32,12 +33,18 @@ public sealed class PohodaOrderXmlParser : IPohodaOrderXmlParser
                 }
                 reader.Read();
             }
-            if (orders.Count == 0) throw new DomainValidationException("Soubor neobsahuje žádné objednávky ve standardním XML formátu POHODA.");
+            if (orders.Count == 0 && !allowEmpty) throw new DomainValidationException("Soubor neobsahuje žádné objednávky ve standardním XML formátu POHODA.");
             return orders;
         }
         catch (DomainValidationException) { throw; }
         catch (XmlException) { throw new DomainValidationException("Soubor není platné XML."); }
         catch (InvalidDataException exception) { throw new DomainValidationException(exception.Message); }
+    }
+
+    private static DomainValidationException ResponseError(XElement element)
+    {
+        var detail = element.DescendantsAndSelf().SelectMany(x => new[] { x.Attribute("note")?.Value, x.Name.LocalName is "error" or "message" ? x.Value : null }).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+        return new DomainValidationException(string.IsNullOrWhiteSpace(detail) ? "POHODA mServer vrátil chybu při exportu objednávek." : $"POHODA mServer vrátil chybu: {detail.Trim()}");
     }
 
     private static PohodaOrderData ParseOrder(XElement order, string? accountingUnit)

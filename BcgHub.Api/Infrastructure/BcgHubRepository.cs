@@ -7,10 +7,12 @@ namespace BcgHub.Api.Infrastructure;
 
 public sealed class BcgHubRepository(BcgHubDbContext db) : IOrderReadRepository, IOrderWriteRepository, IPohodaImportRepository
 {
-    public async Task<PagedResult<OrderListItem>> GetListAsync(string? search, string sortBy, bool descending, int page, int pageSize, Guid? customerId, CancellationToken cancellationToken)
+    public async Task<PagedResult<OrderListItem>> GetListAsync(string? search, string sortBy, bool descending, int page, int pageSize, Guid? customerId, OrderSalesChannel salesChannel, CancellationToken cancellationToken)
     {
         var query = db.Orders.AsNoTracking();
         if (customerId.HasValue) query = query.Where(x => x.CustomerId == customerId.Value);
+        if (salesChannel == OrderSalesChannel.Eshop) query = query.Where(x => x.PohodaOrderId != null && EF.Functions.ILike(x.PohodaOrderId, "%hop%"));
+        if (salesChannel == OrderSalesChannel.Wholesale) query = query.Where(x => x.PohodaOrderId == null || !EF.Functions.ILike(x.PohodaOrderId, "%hop%"));
         if (!string.IsNullOrWhiteSpace(search))
         {
             var pattern = $"%{EscapeLike(search.Trim())}%";
@@ -97,7 +99,7 @@ public sealed class BcgHubRepository(BcgHubDbContext db) : IOrderReadRepository,
         return existing.Select(x => new { x.Id, Key = PohodaOrderImportService.CustomerKey(new PohodaCustomerData(x.Name, x.CompanyNumber, x.VatNumber, null, null, null, null, null, x.CountryCode)) }).Where(x => requestedKeys.Contains(x.Key)).GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase).ToDictionary(x => x.Key, x => x.First().Id, StringComparer.OrdinalIgnoreCase);
     }
 
-    public async Task<IReadOnlySet<string>> FindExistingPohodaOrderIdsAsync(IEnumerable<string> externalIds, CancellationToken cancellationToken) => (await db.Orders.AsNoTracking().Where(x => x.PohodaOrderId != null && externalIds.Contains(x.PohodaOrderId)).Select(x => x.PohodaOrderId!).ToListAsync(cancellationToken)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    public async Task<IReadOnlyDictionary<string, Order>> FindExistingPohodaOrdersAsync(IEnumerable<string> externalIds, CancellationToken cancellationToken) => (await db.Orders.Include(x => x.Customer).Where(x => x.PohodaOrderId != null && externalIds.Contains(x.PohodaOrderId)).ToListAsync(cancellationToken)).ToDictionary(x => x.PohodaOrderId!, StringComparer.OrdinalIgnoreCase);
     public async Task<int> GetNextOrderSequenceAsync(int year, CancellationToken cancellationToken) { var prefix = $"BCG_{year}"; var number = await db.Orders.AsNoTracking().Where(x => x.Number.StartsWith(prefix) && x.Number.Length == prefix.Length + 4).OrderByDescending(x => x.Number).Select(x => x.Number).FirstOrDefaultAsync(cancellationToken); return number is not null && int.TryParse(number[prefix.Length..], out var sequence) ? sequence + 1 : 1; }
     public void AddImportedCustomer(BusinessPartner customer) => db.BusinessPartners.Add(customer);
     public void AddImportedOrder(Order order) => db.Orders.Add(order);

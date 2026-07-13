@@ -1,4 +1,5 @@
 export type OrderStatus = "New" | "InProgress" | "Waiting" | "ReadyForPickup" | "InTransit" | "Completed" | "Cancelled";
+export type OrderSalesChannel = "All" | "Wholesale" | "Eshop";
 export type WorkflowStepStatus = "Pending" | "InProgress" | "Waiting" | "Completed" | "NotRequired";
 export type PartnerType = "Customer" | "Lead" | "Supplier" | "Warehouse" | "Carrier" | "CustomsDeclarant" | "Collaborator";
 export type ComplaintStatus = "New" | "InProgress" | "Resolved" | "Rejected";
@@ -63,10 +64,10 @@ export interface CommentItem { id: string; authorName: string; text: string; cre
 export interface AttachmentItem { id: string; fileName: string; contentType: string; size: number; createdAtUtc: string; version: number }
 export interface Communication { id: string; type: "Email" | "Phone" | "Meeting" | "Note"; businessPartnerId?: string; orderId?: string; subject: string; bodyPreview?: string; sender?: string; recipients?: string; occurredAtUtc: string; version: number }
 export interface PagedResult<T> { items: T[]; page: number; pageSize: number; totalCount: number }
-export type PohodaImportRowStatus = "New" | "Duplicate" | "Error";
+export type PohodaImportRowStatus = "New" | "Updated" | "Unchanged" | "Warning" | "Error";
 export interface PohodaImportRow { externalId: string; pohodaOrderNumber?: string; title: string; customerName: string; companyNumber?: string; orderedOn?: string; requestedDeliveryOn?: string; valueCzk: number; status: PohodaImportRowStatus; message?: string }
-export interface PohodaImportPreview { rows: PohodaImportRow[]; newCount: number; duplicateCount: number; errorCount: number }
-export interface PohodaImportResult { importedCount: number; duplicateCount: number; errorCount: number }
+export interface PohodaImportPreview { rows: PohodaImportRow[]; newCount: number; updatedCount: number; unchangedCount: number; warningCount: number; errorCount: number }
+export interface PohodaImportResult { importedCount: number; updatedCount: number; unchangedCount: number; warningCount: number; errorCount: number }
 export interface CurrentUser { id: string; email: string; fullName: string }
 export interface ManagedUser { id: string; fullName: string; email: string; isActive: boolean; createdAtUtc: string; updatedAtUtc: string; isCurrentUser: boolean }
 export interface CreatedManagedUser { user: ManagedUser; temporaryPassword: string }
@@ -79,6 +80,7 @@ export interface EmailTransportQuoteContext { carrier: PartnerReference; suggest
 export interface EmailOrderOption { id: string; number: string; title: string; customerName: string }
 export interface EmailOrderOptions { suggested: EmailOrderOption[]; other: EmailOrderOption[] }
 export type EmailSenderType = "Carrier" | "Warehouse" | "Collaborator" | "Customer" | "Partner" | "Unknown";
-export interface EmailActionContext { senderType: EmailSenderType; matchedBy: "Address" | "Domain" | "Manual" | "None" | "Ambiguous"; partner?: PartnerReference }
+export interface EmailPartnerSuggestion { id: string; name: string; type: PartnerType; email?: string }
+export interface EmailActionContext { senderType: EmailSenderType; matchedBy: "Address" | "Domain" | "History" | "Manual" | "None" | "Ambiguous"; partner?: PartnerReference; suggestedPartners: EmailPartnerSuggestion[] }
 export interface EmailTemplate { id: string; name: string; subject: string; bodyHtml: string; version: number }
 export interface SendEmail { toAddress: string; ccAddress?: string; subject: string; bodyHtml: string; replyToEmailId?: string; businessPartnerId?: string; orderId?: string }

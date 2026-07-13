@@ -79,6 +79,30 @@ spec:
                   name: bcg-hub-secrets
                   key: MicrosoftGraphClientSecret
                   optional: true
+            - name: Pohoda__Enabled
+              valueFrom:
+                secretKeyRef:
+                  name: bcg-hub-secrets
+                  key: PohodaEnabled
+                  optional: true
+            - name: Pohoda__BaseUrl
+              value: "http://bcg.ipodnik.com:4444"
+            - name: Pohoda__CompanyNumber
+              value: "71726462"
+            - name: Pohoda__Username
+              valueFrom:
+                secretKeyRef:
+                  name: bcg-hub-secrets
+                  key: PohodaUsername
+                  optional: true
+            - name: Pohoda__Password
+              valueFrom:
+                secretKeyRef:
+                  name: bcg-hub-secrets
+                  key: PohodaPassword
+                  optional: true
+            - name: Pohoda__IntervalMinutes
+              value: "5"
           volumeMounts:
             - name: data-protection-keys
               mountPath: /var/bcg-hub/keys

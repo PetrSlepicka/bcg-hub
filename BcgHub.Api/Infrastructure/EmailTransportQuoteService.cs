@@ -4,15 +4,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BcgHub.Api.Infrastructure;
 
-public sealed class EmailTransportQuoteService(BcgHubDbContext db, CurrentUserAccessor currentUser, IOrderCommandService orders, IEmailSenderResolver senderResolver) : IEmailTransportQuoteService
+public sealed class EmailTransportQuoteService(BcgHubDbContext db, CurrentUserAccessor currentUser, IOrderCommandService orders, IEmailPartnerSuggestionService partnerSuggestions) : IEmailTransportQuoteService
 {
     public async Task<EmailTransportQuoteContextDto?> GetContextAsync(Guid emailId, CancellationToken cancellationToken)
     {
         var email = await GetInboundEmailAsync(emailId, cancellationToken);
         if (email is null) return null;
-        var sender = await senderResolver.ResolveAsync(email.FromAddress, cancellationToken);
-        var linkedPartner = email.BusinessPartnerId.HasValue ? await db.BusinessPartners.AsNoTracking().SingleOrDefaultAsync(x => x.Id == email.BusinessPartnerId, cancellationToken) : null;
-        var resolvedPartner = linkedPartner is not null && linkedPartner.Id != sender.Partner?.Id ? linkedPartner : sender.Partner ?? linkedPartner;
+        var resolvedPartner = (await partnerSuggestions.ResolveAsync(email, cancellationToken)).PreferredPartner;
         var carrier = resolvedPartner?.Type == PartnerType.Carrier ? resolvedPartner : null;
         if (carrier is null) return null;
         var orderNumber = EmailProcessor.ExtractOrderNumber(email.Subject);

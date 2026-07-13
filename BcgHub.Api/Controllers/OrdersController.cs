@@ -5,10 +5,10 @@ namespace BcgHub.Api.Controllers;
 
 [ApiController]
 [Route("api/orders")]
-public sealed class OrdersController(IOrderQueryService queries, IOrderCommandService commands, IPohodaOrderImportService pohodaImport, ITransportInquiryService transportInquiries) : ControllerBase
+public sealed class OrdersController(IOrderQueryService queries, IOrderCommandService commands, IPohodaOrderImportService pohodaImport, IPohodaSyncService pohodaSync, ITransportInquiryService transportInquiries) : ControllerBase
 {
     [HttpGet]
-    public Task<PagedResult<OrderListItem>> GetList([FromQuery] string? search = null, [FromQuery] string sortBy = "number", [FromQuery] bool descending = true, [FromQuery] int page = 1, [FromQuery] int pageSize = 50, [FromQuery] Guid? customerId = null, CancellationToken cancellationToken = default) => queries.GetListAsync(search, sortBy, descending, page, pageSize, customerId, cancellationToken);
+    public Task<PagedResult<OrderListItem>> GetList([FromQuery] string? search = null, [FromQuery] string sortBy = "number", [FromQuery] bool descending = true, [FromQuery] int page = 1, [FromQuery] int pageSize = 50, [FromQuery] Guid? customerId = null, [FromQuery] OrderSalesChannel salesChannel = OrderSalesChannel.All, CancellationToken cancellationToken = default) => queries.GetListAsync(search, sortBy, descending, page, pageSize, customerId, salesChannel, cancellationToken);
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<OrderDetailDto>> GetDetail(Guid id, CancellationToken cancellationToken) => await queries.GetDetailAsync(id, cancellationToken) is { } order ? Ok(order) : NotFound();
@@ -59,6 +59,12 @@ public sealed class OrdersController(IOrderQueryService queries, IOrderCommandSe
         await using var stream = file.OpenReadStream();
         return Ok(await pohodaImport.ImportAsync(stream, cancellationToken));
     }
+
+    [HttpGet("pohoda/sync/status")]
+    public async Task<ActionResult<PohodaSyncStatus>> GetPohodaSyncStatus(CancellationToken cancellationToken) => Ok(await pohodaSync.GetStatusAsync(cancellationToken));
+
+    [HttpPost("pohoda/sync"), ValidateAntiForgeryToken]
+    public async Task<ActionResult<PohodaSyncResult>> SyncPohoda(CancellationToken cancellationToken) => Ok(await pohodaSync.SyncAsync("manual", cancellationToken));
 
     private static void ValidatePohodaFile(IFormFile file)
     {

@@ -24,6 +24,7 @@ public sealed class EmailSenderResolverTests
         var match = EmailSenderResolver.Resolve([customer], "unknown@gmail.com");
         Assert.Equal(EmailSenderMatchKind.None, match.Kind);
         Assert.Null(match.Partner);
+        Assert.Empty(match.Partners);
     }
 
     [Fact]
@@ -32,8 +33,10 @@ public sealed class EmailSenderResolverTests
         var carrier = Partner(PartnerType.Carrier, "transport@firma.cz");
         var warehouse = Partner(PartnerType.Warehouse, "warehouse@firma.cz");
         var match = EmailSenderResolver.Resolve([carrier, warehouse], "new-contact@firma.cz");
-        Assert.Equal(EmailSenderMatchKind.Ambiguous, match.Kind);
+        Assert.Equal(EmailSenderMatchKind.Domain, match.Kind);
         Assert.Null(match.Partner);
+        Assert.True(match.IsAmbiguous);
+        Assert.Equal([carrier, warehouse], match.Partners);
     }
 
     private static BusinessPartner Partner(PartnerType type, string email) => new() { Id = Guid.NewGuid(), Type = type, Name = email, Email = email };

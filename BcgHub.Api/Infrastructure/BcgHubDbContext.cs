@@ -18,6 +18,7 @@ public sealed class BcgHubDbContext(DbContextOptions<BcgHubDbContext> options) :
     public DbSet<EmailAccountSettings> EmailAccountSettings => Set<EmailAccountSettings>();
     public DbSet<EmailMessage> EmailMessages => Set<EmailMessage>();
     public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
+    public DbSet<PohodaSyncState> PohodaSyncStates => Set<PohodaSyncState>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

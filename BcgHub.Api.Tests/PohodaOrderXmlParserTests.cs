@@ -62,4 +62,35 @@ public sealed class PohodaOrderXmlParserTests
         Assert.Equal("Česká objednávka", order.Title);
         Assert.Equal("Žluťoučký zákazník", order.Customer.Name);
     }
+
+    [Fact]
+    public void UsesConfiguredCompanyNumberWhenMServerResponseDoesNotContainIco()
+    {
+        const string xml = "<responsePack state=\"ok\"><responsePackItem state=\"ok\"><listOrder state=\"ok\"><order><orderHeader><id>42</id><orderType>receivedOrder</orderType><partnerIdentity><address><company>Zákazník</company></address></partnerIdentity></orderHeader></order></listOrder></responsePackItem></responsePack>";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(xml));
+
+        var order = Assert.Single(new PohodaOrderXmlParser().Parse(stream, "71726462", true));
+
+        Assert.Equal("71726462:42", order.ExternalId);
+    }
+
+    [Fact]
+    public void AllowsSuccessfulMServerResponseWithoutChangedOrders()
+    {
+        using var stream = new MemoryStream("<responsePack state=\"ok\"><responsePackItem state=\"ok\"><listOrder state=\"ok\" /></responsePackItem></responsePack>"u8.ToArray());
+
+        var orders = new PohodaOrderXmlParser().Parse(stream, "71726462", true);
+
+        Assert.Empty(orders);
+    }
+
+    [Fact]
+    public void RejectsMServerErrorResponseEvenWhenEmptyResponsesAreAllowed()
+    {
+        using var stream = new MemoryStream("<responsePack state=\"ok\"><responsePackItem state=\"error\" note=\"Neplatné přihlášení\" /></responsePack>"u8.ToArray());
+
+        var exception = Assert.Throws<DomainValidationException>(() => new PohodaOrderXmlParser().Parse(stream, "71726462", true));
+
+        Assert.Contains("Neplatné přihlášení", exception.Message);
+    }
 }

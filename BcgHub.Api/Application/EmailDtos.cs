@@ -9,7 +9,8 @@ public sealed record EmailMessageDto(Guid Id, string Direction, string FromAddre
 public sealed record LinkEmailRequest(Guid? BusinessPartnerId, Guid? OrderId, uint Version);
 public sealed record EmailOrderOptionDto(Guid Id, string Number, string Title, string CustomerName);
 public sealed record EmailOrderOptionsDto(IReadOnlyList<EmailOrderOptionDto> Suggested, IReadOnlyList<EmailOrderOptionDto> Other);
-public sealed record EmailActionContextDto(string SenderType, string MatchedBy, PartnerReference? Partner);
+public sealed record EmailPartnerSuggestionDto(Guid Id, string Name, string Type, string? Email);
+public sealed record EmailActionContextDto(string SenderType, string MatchedBy, PartnerReference? Partner, IReadOnlyList<EmailPartnerSuggestionDto> SuggestedPartners);
 public sealed record EmailTransportQuoteContextDto(PartnerReference Carrier, Guid? SuggestedOrderId, IReadOnlyList<EmailOrderOptionDto> Orders);
 public sealed record CreateEmailTransportQuoteRequest(Guid OrderId, [Range(0, 9999999999999999d)] decimal Price, [Required, RegularExpression("^[A-Za-z]{3}$")] string Currency, DateOnly? PickupOn, DateOnly? DeliveryOn, [StringLength(5000)] string? Notes);
 public sealed record EmailSyncResultDto(int ImportedCount);

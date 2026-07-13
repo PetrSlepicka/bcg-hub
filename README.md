@@ -62,6 +62,14 @@ https://dev.radixal.net/bcg-hub/api/settings/email/microsoft/callback
 
 Do konfigurace API přidejte `MicrosoftGraph__ClientId`, `MicrosoftGraph__ClientSecret` a případně `MicrosoftGraph__TenantId` (výchozí hodnota je `organizations`). V Kubernetes se Client ID a Client Secret čtou z klíčů `MicrosoftGraphClientId` a `MicrosoftGraphClientSecret` v secretu `bcg-hub-secrets`. Refresh token uživatele je uložen šifrovaně pomocí stejného perzistentního Data Protection key ringu jako ostatní citlivá nastavení.
 
+## Automatická synchronizace POHODA
+
+API stahuje nové a změněné přijaté objednávky z POHODA mServeru při startu a následně v intervalu `Pohoda:IntervalMinutes`. Poslední úspěšný checkpoint ukládá do databáze; každý požadavek používá konfigurovatelný překryv `Pohoda:OverlapMinutes`, takže opakované záznamy bezpečně zpracuje idempotentní import.
+
+V Kubernetes nastavte v secretu `bcg-hub-secrets` klíče `PohodaEnabled` (`true`), `PohodaUsername` a `PohodaPassword`. Adresa `http://bcg.ipodnik.com:4444` a IČO `71726462` jsou v deploymentu nastavené jako necitlivé hodnoty. Přihlašovací údaje se nesmí ukládat do repozitáře ani vypisovat do logu.
+
+Stav poslední synchronizace vrací `GET /api/orders/pohoda/sync/status`; ruční běh spouští `POST /api/orders/pohoda/sync`. Logy obsahují run ID, trigger, checkpoint, délku odpovědi, dobu běhu a počty nových, aktualizovaných, nezměněných, varovných a chybných objednávek.
+
 Frontend ve všech prostředích komunikuje výhradně se serverovou API na `https://dev.radixal.net/bcg-hub/api`.
 
 ## Ověření

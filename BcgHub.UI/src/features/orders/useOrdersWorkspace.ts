@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../../api";
-import type { OrderDetail, OrderListItem, WorkflowStep, WorkflowStepStatus } from "../../domain";
+import type { OrderDetail, OrderListItem, OrderSalesChannel, WorkflowStep, WorkflowStepStatus } from "../../domain";
 
 export function useOrdersWorkspace(requestedEntityId?: string, onSelectedEntityIdChange?: (id?: string) => void) {
   const [orders, setOrders] = useState<OrderListItem[]>([]);
@@ -10,6 +10,7 @@ export function useOrdersWorkspace(requestedEntityId?: string, onSelectedEntityI
   const [selectedId, setSelectedId] = useState<string | undefined>(requestedEntityId);
   const [detail, setDetail] = useState<OrderDetail>();
   const [search, setSearch] = useState("");
+  const [salesChannel, setSalesChannel] = useState<OrderSalesChannel>("All");
   const [sortBy, setSortBy] = useState("number");
   const [descending, setDescending] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -23,10 +24,10 @@ export function useOrdersWorkspace(requestedEntityId?: string, onSelectedEntityI
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setLoading(true);
-      api.orders.list(search, sortBy, descending, controller.signal, page, pageSize).then(result => { setOrders(result.items); setTotalCount(result.totalCount); setSelectedId(current => requestedEntityId && current === requestedEntityId ? current : current && result.items.some(x => x.id === current) ? current : result.items[0]?.id); setError(undefined); }).catch(caught => { if (caught?.name !== "AbortError") setError("Zakázky se nepodařilo načíst."); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+      api.orders.list(search, sortBy, descending, controller.signal, page, pageSize, undefined, salesChannel).then(result => { setOrders(result.items); setTotalCount(result.totalCount); setSelectedId(current => requestedEntityId && current === requestedEntityId ? current : current && result.items.some(x => x.id === current) ? current : result.items[0]?.id); setError(undefined); }).catch(caught => { if (caught?.name !== "AbortError") setError("Zakázky se nepodařilo načíst."); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, 180);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [search, sortBy, descending, page, refreshToken]);
+  }, [search, salesChannel, sortBy, descending, page, refreshToken]);
 
   useEffect(() => {
     if (!selectedId) { setDetail(undefined); return; }
@@ -60,6 +61,7 @@ export function useOrdersWorkspace(requestedEntityId?: string, onSelectedEntityI
   };
 
   const changeSearch = (value: string) => { setSearch(value); setPage(1); };
+  const changeSalesChannel = (value: OrderSalesChannel) => { setSalesChannel(value); setPage(1); };
   const changeSortBy = (value: string) => { setSortBy(value); setPage(1); };
-  return { orders, totalCount, page, pageSize, selectedId, detail, search, sortBy, descending, loading, error, updatingSteps, setSelectedId, setSearch: changeSearch, setSortBy: changeSortBy, setDescending, setPage, updateStep, refresh: () => setRefreshToken(x => x + 1) };
+  return { orders, totalCount, page, pageSize, selectedId, detail, search, salesChannel, sortBy, descending, loading, error, updatingSteps, setSelectedId, setSearch: changeSearch, setSalesChannel: changeSalesChannel, setSortBy: changeSortBy, setDescending, setPage, updateStep, refresh: () => setRefreshToken(x => x + 1) };
 }

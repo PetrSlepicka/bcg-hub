@@ -11,28 +11,26 @@ public sealed class EmailSenderResolver(BcgHubDbContext db) : IEmailSenderResolv
     public async Task<EmailSenderMatch> ResolveAsync(string address, CancellationToken cancellationToken)
     {
         var normalizedAddress = NormalizeAddress(address);
-        if (normalizedAddress is null) return new EmailSenderMatch(null, EmailSenderMatchKind.None);
-        var exactMatches = await db.BusinessPartners.AsNoTracking().Where(partner => partner.Email != null && partner.Email.ToLower() == normalizedAddress || partner.Contacts.Any(contact => contact.Email != null && contact.Email.ToLower() == normalizedAddress)).Take(2).ToListAsync(cancellationToken);
-        if (exactMatches.Count == 1) return new EmailSenderMatch(exactMatches[0], EmailSenderMatchKind.Address);
-        if (exactMatches.Count > 1) return new EmailSenderMatch(null, EmailSenderMatchKind.Ambiguous);
+        if (normalizedAddress is null) return new EmailSenderMatch([], EmailSenderMatchKind.None);
+        var exactMatches = await db.BusinessPartners.AsNoTracking().Where(partner => partner.Email != null && partner.Email.ToLower() == normalizedAddress || partner.Contacts.Any(contact => contact.Email != null && contact.Email.ToLower() == normalizedAddress)).OrderBy(x => x.Name).ToListAsync(cancellationToken);
+        if (exactMatches.Count > 0) return new EmailSenderMatch(exactMatches, EmailSenderMatchKind.Address);
         var domain = GetDomain(normalizedAddress);
-        if (domain is null || PublicDomains.Contains(domain)) return new EmailSenderMatch(null, EmailSenderMatchKind.None);
+        if (domain is null || PublicDomains.Contains(domain)) return new EmailSenderMatch([], EmailSenderMatchKind.None);
         var suffix = $"@{domain}";
-        var domainMatches = await db.BusinessPartners.AsNoTracking().Where(partner => partner.Email != null && partner.Email.ToLower().EndsWith(suffix) || partner.Contacts.Any(contact => contact.Email != null && contact.Email.ToLower().EndsWith(suffix))).Take(2).ToListAsync(cancellationToken);
-        return domainMatches.Count switch { 0 => new EmailSenderMatch(null, EmailSenderMatchKind.None), 1 => new EmailSenderMatch(domainMatches[0], EmailSenderMatchKind.Domain), _ => new EmailSenderMatch(null, EmailSenderMatchKind.Ambiguous) };
+        var domainMatches = await db.BusinessPartners.AsNoTracking().Where(partner => partner.Email != null && partner.Email.ToLower().EndsWith(suffix) || partner.Contacts.Any(contact => contact.Email != null && contact.Email.ToLower().EndsWith(suffix))).OrderBy(x => x.Name).ToListAsync(cancellationToken);
+        return new EmailSenderMatch(domainMatches, domainMatches.Count == 0 ? EmailSenderMatchKind.None : EmailSenderMatchKind.Domain);
     }
 
     internal static EmailSenderMatch Resolve(IReadOnlyCollection<BusinessPartner> partners, string address)
     {
         var normalizedAddress = NormalizeAddress(address);
-        if (normalizedAddress is null) return new EmailSenderMatch(null, EmailSenderMatchKind.None);
+        if (normalizedAddress is null) return new EmailSenderMatch([], EmailSenderMatchKind.None);
         var exactMatches = partners.Where(partner => NormalizeAddress(partner.Email) == normalizedAddress || partner.Contacts.Any(contact => NormalizeAddress(contact.Email) == normalizedAddress)).ToList();
-        if (exactMatches.Count == 1) return new EmailSenderMatch(exactMatches[0], EmailSenderMatchKind.Address);
-        if (exactMatches.Count > 1) return new EmailSenderMatch(null, EmailSenderMatchKind.Ambiguous);
+        if (exactMatches.Count > 0) return new EmailSenderMatch(exactMatches, EmailSenderMatchKind.Address);
         var domain = GetDomain(normalizedAddress);
-        if (domain is null || PublicDomains.Contains(domain)) return new EmailSenderMatch(null, EmailSenderMatchKind.None);
+        if (domain is null || PublicDomains.Contains(domain)) return new EmailSenderMatch([], EmailSenderMatchKind.None);
         var domainMatches = partners.Where(partner => GetDomain(partner.Email) == domain || partner.Contacts.Any(contact => GetDomain(contact.Email) == domain)).ToList();
-        return domainMatches.Count switch { 0 => new EmailSenderMatch(null, EmailSenderMatchKind.None), 1 => new EmailSenderMatch(domainMatches[0], EmailSenderMatchKind.Domain), _ => new EmailSenderMatch(null, EmailSenderMatchKind.Ambiguous) };
+        return new EmailSenderMatch(domainMatches, domainMatches.Count == 0 ? EmailSenderMatchKind.None : EmailSenderMatchKind.Domain);
     }
 
     internal static string? GetDomain(string? address)

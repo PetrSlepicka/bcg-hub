@@ -50,7 +50,7 @@ public sealed class OrderCommandServiceTests
         public void RemoveQuote(TransportQuote quote) { }
         public void SetOriginalVersion(OrderWorkflowStep step, uint version) { }
         public Task SaveChangesAsync(CancellationToken cancellationToken) { SaveCount++; return Task.CompletedTask; }
-        public Task<PagedResult<OrderListItem>> GetListAsync(string? search, string sortBy, bool descending, int page, int pageSize, Guid? customerId, CancellationToken cancellationToken) => Task.FromResult(new PagedResult<OrderListItem>([], page, pageSize, 0));
+        public Task<PagedResult<OrderListItem>> GetListAsync(string? search, string sortBy, bool descending, int page, int pageSize, Guid? customerId, OrderSalesChannel salesChannel, CancellationToken cancellationToken) => Task.FromResult(new PagedResult<OrderListItem>([], page, pageSize, 0));
         public Task<OrderDetailDto?> GetDetailAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult<OrderDetailDto?>(new(id, AddedOrder!.Number, null, AddedOrder.Title, AddedOrder.Status, new(AddedOrder.CustomerId, "Customer"), null, null, null, null, null, null, null, null, AddedOrder.ValueCzk, AddedOrder.WeightKg, AddedOrder.VolumeM3, null, [], [], null, 0));
     }
 }

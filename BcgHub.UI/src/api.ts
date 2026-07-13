@@ -1,4 +1,4 @@
-import type { AttachmentItem, CommentItem, Communication, ComplaintDetail, ComplaintListItem, ContactPerson, CreatedManagedUser, CurrentUser, EmailActionContext, EmailMessage, EmailOrderOptions, EmailSettings, EmailTemplate, EmailTransportQuoteContext, ManagedUser, ManagedUserInput, OrderDetail, OrderListItem, PagedResult, PartnerDetail, PartnerListItem, PartnerType, PohodaImportPreview, PohodaImportResult, ResourceOwnerType, SaveComplaint, SaveEmailSettings, SendEmail, SaveOrder, SavePartner, TransportInquiryContext, TransportQuote, TransportType, WorkflowStep, WorkflowStepStatus } from "./domain";
+import type { AttachmentItem, CommentItem, Communication, ComplaintDetail, ComplaintListItem, ContactPerson, CreatedManagedUser, CurrentUser, EmailActionContext, EmailMessage, EmailOrderOptions, EmailSettings, EmailTemplate, EmailTransportQuoteContext, ManagedUser, ManagedUserInput, OrderDetail, OrderListItem, OrderSalesChannel, PagedResult, PartnerDetail, PartnerListItem, PartnerType, PohodaImportPreview, PohodaImportResult, ResourceOwnerType, SaveComplaint, SaveEmailSettings, SendEmail, SaveOrder, SavePartner, TransportInquiryContext, TransportQuote, TransportType, WorkflowStep, WorkflowStepStatus } from "./domain";
 
 const apiRoot = "https://dev.radixal.net/bcg-hub/api";
 let csrfTokenPromise: Promise<string> | undefined;
@@ -45,7 +45,7 @@ export const api = {
     deactivate: (id: string) => request<void>(`/users/${id}`, { method: "DELETE" })
   },
   orders: {
-    list: (search: string, sortBy: string, descending: boolean, signal?: AbortSignal, page = 1, pageSize = 50, customerId?: string) => request<PagedResult<OrderListItem>>(`/orders?search=${encodeURIComponent(search)}&sortBy=${encodeURIComponent(sortBy)}&descending=${descending}&page=${page}&pageSize=${pageSize}${customerId ? `&customerId=${encodeURIComponent(customerId)}` : ""}`, { signal }),
+    list: (search: string, sortBy: string, descending: boolean, signal?: AbortSignal, page = 1, pageSize = 50, customerId?: string, salesChannel: OrderSalesChannel = "All") => request<PagedResult<OrderListItem>>(`/orders?search=${encodeURIComponent(search)}&sortBy=${encodeURIComponent(sortBy)}&descending=${descending}&page=${page}&pageSize=${pageSize}&salesChannel=${salesChannel}${customerId ? `&customerId=${encodeURIComponent(customerId)}` : ""}`, { signal }),
     detail: (id: string, signal?: AbortSignal) => request<OrderDetail>(`/orders/${id}`, { signal }),
     create: (value: SaveOrder) => request<OrderDetail>("/orders", { method: "POST", body: JSON.stringify(value) }),
     update: (id: string, value: SaveOrder) => request<OrderDetail>(`/orders/${id}`, { method: "PUT", body: JSON.stringify(value) }),
