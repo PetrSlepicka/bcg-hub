@@ -14,7 +14,7 @@ public sealed class PohodaSyncService(IServiceScopeFactory scopeFactory, IPohoda
         var runId = Guid.NewGuid().ToString("N");
         var startedAtUtc = DateTime.UtcNow;
         var state = await stateStore.GetAsync(cancellationToken);
-        var changedSinceUtc = (state.LastSuccessfulSyncUtc ?? startedAtUtc.AddDays(-Math.Clamp(settings.InitialLookbackDays, 1, 3650))).AddMinutes(-Math.Clamp(settings.OverlapMinutes, 0, 60));
+        var changedSinceUtc = (state.LastSuccessfulSyncUtc ?? startedAtUtc.AddDays(-Math.Clamp(settings.InitialLookbackDays, 1, 3650))).AddMinutes(-Math.Clamp(settings.OverlapMinutes, 0, 1440));
         await stateStore.RecordAttemptAsync(runId, trigger, startedAtUtc, cancellationToken);
         var stopwatch = Stopwatch.StartNew();
         logger.LogInformation("POHODA synchronization {RunId} started. Trigger: {Trigger}, checkpoint UTC: {CheckpointUtc}, endpoint: {Endpoint}.", runId, trigger, changedSinceUtc, SafeEndpoint(settings.BaseUrl));
@@ -22,7 +22,7 @@ public sealed class PohodaSyncService(IServiceScopeFactory scopeFactory, IPohoda
         {
             await using var response = await client.DownloadChangedOrdersAsync(changedSinceUtc, runId, cancellationToken);
             await using var scope = scopeFactory.CreateAsyncScope();
-            var import = await scope.ServiceProvider.GetRequiredService<IPohodaOrderImportService>().ImportMServerResponseAsync(response.Content, settings.CompanyNumber, cancellationToken);
+            var import = await scope.ServiceProvider.GetRequiredService<IPohodaOrderImportService>().ImportMServerResponseAsync(response.Content, settings.CompanyNumber, runId, cancellationToken);
             var completedAtUtc = DateTime.UtcNow;
             await stateStore.RecordSuccessAsync(runId, trigger, startedAtUtc, completedAtUtc, import, cancellationToken);
             var result = new PohodaSyncResult(runId, trigger, changedSinceUtc, startedAtUtc, completedAtUtc, import.ImportedCount, import.UpdatedCount, import.UnchangedCount, import.WarningCount, import.ErrorCount);

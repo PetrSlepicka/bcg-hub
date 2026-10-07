@@ -1,5 +1,7 @@
 using System.Net;
 using System.Text;
+using System.Xml.Linq;
+using BcgHub.Api.Application;
 using BcgHub.Api.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -15,7 +17,7 @@ public sealed class PohodaMServerClientTests
         var handler = new RecordingHandler();
         var factory = new FakeHttpClientFactory(handler);
         var options = Options.Create(new PohodaOptions { Enabled = true, BaseUrl = "http://bcg.ipodnik.com:4444", CompanyNumber = "71726462", Username = "sync-user", Password = "secret", TimeZoneId = "Europe/Prague" });
-        var client = new PohodaMServerClient(factory, options, NullLogger<PohodaMServerClient>.Instance);
+        var client = new PohodaMServerClient(factory, new PohodaOrderExportRequestFactory(), options, NullLogger<PohodaMServerClient>.Instance);
 
         await using var response = await client.DownloadChangedOrdersAsync(new DateTime(2026, 7, 13, 8, 15, 0, DateTimeKind.Utc), "run123", CancellationToken.None);
 
@@ -26,6 +28,22 @@ public sealed class PohodaMServerClientTests
         Assert.Contains("ico=\"71726462\"", handler.Body);
         Assert.Contains("orderType=\"receivedOrder\"", handler.Body);
         Assert.Contains("<ftr:lastChanges>2026-07-13T10:15:00</ftr:lastChanges>", handler.Body);
+        Assert.DoesNotContain("actionType", handler.Body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<ord:order", handler.Body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("delete", handler.Body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("update", handler.Body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ReadOnlyGuardRejectsDocumentImportOperation()
+    {
+        XNamespace dat = "http://www.stormware.cz/schema/version_2/data.xsd";
+        XNamespace ord = "http://www.stormware.cz/schema/version_2/order.xsd";
+        var document = new XDocument(new XElement(dat + "dataPack", new XElement(dat + "dataPackItem", new XElement(ord + "order"))));
+
+        var exception = Assert.Throws<DomainValidationException>(() => PohodaReadOnlyRequestGuard.Validate(document));
+
+        Assert.Contains("exportní požadavek", exception.Message);
     }
 
     private sealed class RecordingHandler : HttpMessageHandler

@@ -9,7 +9,8 @@ public sealed class PohodaOptions
     public string Password { get; init; } = "";
     public int IntervalMinutes { get; init; } = 5;
     public int InitialLookbackDays { get; init; } = 3650;
-    public int OverlapMinutes { get; init; } = 2;
+    public int OverlapMinutes { get; init; } = 120;
     public int RequestTimeoutMinutes { get; init; } = 10;
+    public long MaxResponseBytes { get; init; } = 250_000_000;
     public string TimeZoneId { get; init; } = "Europe/Prague";
 }

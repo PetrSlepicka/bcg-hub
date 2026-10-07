@@ -23,7 +23,7 @@ public sealed class PohodaSyncServiceTests
 
         var result = await service.SyncAsync("scheduled", CancellationToken.None);
 
-        Assert.Equal(checkpoint.AddMinutes(-2), Assert.Single(client.ChangedSince));
+        Assert.Equal(checkpoint.AddMinutes(-120), Assert.Single(client.ChangedSince));
         Assert.Equal(1, result.UnchangedCount);
         Assert.NotNull(state.LastSuccessfulSyncUtc);
         Assert.InRange(state.LastSuccessfulSyncUtc!.Value, before, DateTime.UtcNow);
@@ -46,7 +46,7 @@ public sealed class PohodaSyncServiceTests
         Assert.Equal("Import selhal", state.LastError);
     }
 
-    private static PohodaSyncService CreateService(ServiceProvider provider, IPohodaMServerClient client, IPohodaSyncStateStore state) => new(provider.GetRequiredService<IServiceScopeFactory>(), client, state, new PohodaSyncLock(), Options.Create(new PohodaOptions { Enabled = true, BaseUrl = "http://bcg.ipodnik.com:4444", CompanyNumber = "71726462", InitialLookbackDays = 30, OverlapMinutes = 2 }), NullLogger<PohodaSyncService>.Instance);
+    private static PohodaSyncService CreateService(ServiceProvider provider, IPohodaMServerClient client, IPohodaSyncStateStore state) => new(provider.GetRequiredService<IServiceScopeFactory>(), client, state, new PohodaSyncLock(), Options.Create(new PohodaOptions { Enabled = true, BaseUrl = "http://bcg.ipodnik.com:4444", CompanyNumber = "71726462", InitialLookbackDays = 30, OverlapMinutes = 120 }), NullLogger<PohodaSyncService>.Instance);
 
     private static ServiceProvider Services(IPohodaOrderImportService importer)
     {
@@ -62,8 +62,7 @@ public sealed class PohodaSyncServiceTests
         public Task<PohodaMServerResponse> DownloadChangedOrdersAsync(DateTime changedSinceUtc, string runId, CancellationToken cancellationToken)
         {
             ChangedSince.Add(changedSinceUtc);
-            var response = new HttpResponseMessage(HttpStatusCode.OK);
-            return Task.FromResult(new PohodaMServerResponse(response, new MemoryStream("<responsePack state=\"ok\" />"u8.ToArray()), 27));
+            return Task.FromResult(new PohodaMServerResponse(new MemoryStream("<responsePack state=\"ok\" />"u8.ToArray()), 27));
         }
     }
 
@@ -76,7 +75,7 @@ public sealed class PohodaSyncServiceTests
         public FakeImportService(Exception exception) => this.exception = exception;
         public Task<PohodaImportPreview> PreviewAsync(Stream xml, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<PohodaImportResult> ImportAsync(Stream xml, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<PohodaImportResult> ImportMServerResponseAsync(Stream xml, string companyNumber, CancellationToken cancellationToken) => exception is null ? Task.FromResult(result!) : Task.FromException<PohodaImportResult>(exception);
+        public Task<PohodaImportResult> ImportMServerResponseAsync(Stream xml, string companyNumber, string expectedResponseId, CancellationToken cancellationToken) => exception is null ? Task.FromResult(result!) : Task.FromException<PohodaImportResult>(exception);
     }
 
     private sealed class FakeStateStore(DateTime? checkpoint) : IPohodaSyncStateStore

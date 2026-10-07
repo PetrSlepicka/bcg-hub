@@ -60,7 +60,7 @@ public interface IPohodaOrderImportService
 {
     Task<PohodaImportPreview> PreviewAsync(Stream xml, CancellationToken cancellationToken);
     Task<PohodaImportResult> ImportAsync(Stream xml, CancellationToken cancellationToken);
-    Task<PohodaImportResult> ImportMServerResponseAsync(Stream xml, string companyNumber, CancellationToken cancellationToken);
+    Task<PohodaImportResult> ImportMServerResponseAsync(Stream xml, string companyNumber, string expectedResponseId, CancellationToken cancellationToken);
 }
 
 public interface IPohodaSyncService

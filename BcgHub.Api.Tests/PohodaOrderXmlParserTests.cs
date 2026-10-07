@@ -66,10 +66,10 @@ public sealed class PohodaOrderXmlParserTests
     [Fact]
     public void UsesConfiguredCompanyNumberWhenMServerResponseDoesNotContainIco()
     {
-        const string xml = "<responsePack state=\"ok\"><responsePackItem state=\"ok\"><listOrder state=\"ok\"><order><orderHeader><id>42</id><orderType>receivedOrder</orderType><partnerIdentity><address><company>Zákazník</company></address></partnerIdentity></orderHeader></order></listOrder></responsePackItem></responsePack>";
+        const string xml = "<rsp:responsePack id=\"run1\" state=\"ok\" xmlns:rsp=\"http://www.stormware.cz/schema/version_2/response.xsd\" xmlns:lst=\"http://www.stormware.cz/schema/version_2/list.xsd\" xmlns:ord=\"http://www.stormware.cz/schema/version_2/order.xsd\"><rsp:responsePackItem id=\"run1\" state=\"ok\"><lst:listOrder state=\"ok\"><ord:order><ord:orderHeader><ord:id>42</ord:id><ord:orderType>receivedOrder</ord:orderType><ord:partnerIdentity><ord:address><ord:company>Zákazník</ord:company></ord:address></ord:partnerIdentity></ord:orderHeader><ord:orderSummary><ord:homeCurrency><ord:priceNone>0</ord:priceNone></ord:homeCurrency></ord:orderSummary></ord:order></lst:listOrder></rsp:responsePackItem></rsp:responsePack>";
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(xml));
 
-        var order = Assert.Single(new PohodaOrderXmlParser().Parse(stream, "71726462", true));
+        var order = Assert.Single(new PohodaOrderXmlParser().ParseMServerResponse(stream, "71726462", "run1"));
 
         Assert.Equal("71726462:42", order.ExternalId);
     }
@@ -77,9 +77,9 @@ public sealed class PohodaOrderXmlParserTests
     [Fact]
     public void AllowsSuccessfulMServerResponseWithoutChangedOrders()
     {
-        using var stream = new MemoryStream("<responsePack state=\"ok\"><responsePackItem state=\"ok\"><listOrder state=\"ok\" /></responsePackItem></responsePack>"u8.ToArray());
+        using var stream = new MemoryStream("<rsp:responsePack id=\"run1\" state=\"ok\" xmlns:rsp=\"http://www.stormware.cz/schema/version_2/response.xsd\" xmlns:lst=\"http://www.stormware.cz/schema/version_2/list.xsd\"><rsp:responsePackItem id=\"run1\" state=\"ok\"><lst:listOrder state=\"ok\" /></rsp:responsePackItem></rsp:responsePack>"u8.ToArray());
 
-        var orders = new PohodaOrderXmlParser().Parse(stream, "71726462", true);
+        var orders = new PohodaOrderXmlParser().ParseMServerResponse(stream, "71726462", "run1");
 
         Assert.Empty(orders);
     }
@@ -87,10 +87,51 @@ public sealed class PohodaOrderXmlParserTests
     [Fact]
     public void RejectsMServerErrorResponseEvenWhenEmptyResponsesAreAllowed()
     {
-        using var stream = new MemoryStream("<responsePack state=\"ok\"><responsePackItem state=\"error\" note=\"Neplatné přihlášení\" /></responsePack>"u8.ToArray());
+        using var stream = new MemoryStream("<rsp:responsePack id=\"run1\" state=\"ok\" xmlns:rsp=\"http://www.stormware.cz/schema/version_2/response.xsd\"><rsp:responsePackItem id=\"run1\" state=\"error\" note=\"Neplatné přihlášení\" /></rsp:responsePack>"u8.ToArray());
 
-        var exception = Assert.Throws<DomainValidationException>(() => new PohodaOrderXmlParser().Parse(stream, "71726462", true));
+        var exception = Assert.Throws<DomainValidationException>(() => new PohodaOrderXmlParser().ParseMServerResponse(stream, "71726462", "run1"));
 
         Assert.Contains("Neplatné přihlášení", exception.Message);
+    }
+
+    [Fact]
+    public void RejectsSuccessfulHttpBodyThatIsNotOfficialMServerResponse()
+    {
+        using var stream = new MemoryStream("<html><body>Proxy login</body></html>"u8.ToArray());
+
+        var exception = Assert.Throws<DomainValidationException>(() => new PohodaOrderXmlParser().ParseMServerResponse(stream, "71726462", "run1"));
+
+        Assert.Contains("responsePack", exception.Message);
+    }
+
+    [Fact]
+    public void RejectsResponseForDifferentAccountingUnit()
+    {
+        using var stream = new MemoryStream("<rsp:responsePack id=\"run1\" state=\"ok\" ico=\"99999999\" xmlns:rsp=\"http://www.stormware.cz/schema/version_2/response.xsd\" xmlns:lst=\"http://www.stormware.cz/schema/version_2/list.xsd\"><rsp:responsePackItem id=\"run1\" state=\"ok\"><lst:listOrder state=\"ok\" /></rsp:responsePackItem></rsp:responsePack>"u8.ToArray());
+
+        var exception = Assert.Throws<DomainValidationException>(() => new PohodaOrderXmlParser().ParseMServerResponse(stream, "71726462", "run1"));
+
+        Assert.Contains("jinou účetní jednotku", exception.Message);
+    }
+
+    [Fact]
+    public void RejectsResponseBelongingToDifferentRequest()
+    {
+        using var stream = new MemoryStream("<rsp:responsePack id=\"old-run\" state=\"ok\" ico=\"71726462\" xmlns:rsp=\"http://www.stormware.cz/schema/version_2/response.xsd\" xmlns:lst=\"http://www.stormware.cz/schema/version_2/list.xsd\"><rsp:responsePackItem id=\"old-run\" state=\"ok\"><lst:listOrder state=\"ok\" /></rsp:responsePackItem></rsp:responsePack>"u8.ToArray());
+
+        var exception = Assert.Throws<DomainValidationException>(() => new PohodaOrderXmlParser().ParseMServerResponse(stream, "71726462", "run1"));
+
+        Assert.Contains("jiný požadavek", exception.Message);
+    }
+
+    [Fact]
+    public void RejectsInvalidAmountInsteadOfReplacingItWithZero()
+    {
+        const string xml = "<rsp:responsePack id=\"run1\" state=\"ok\" ico=\"71726462\" xmlns:rsp=\"http://www.stormware.cz/schema/version_2/response.xsd\" xmlns:lst=\"http://www.stormware.cz/schema/version_2/list.xsd\" xmlns:ord=\"http://www.stormware.cz/schema/version_2/order.xsd\"><rsp:responsePackItem id=\"run1\" state=\"ok\"><lst:listOrder state=\"ok\"><ord:order><ord:orderHeader><ord:id>42</ord:id><ord:orderType>receivedOrder</ord:orderType><ord:partnerIdentity><ord:address><ord:company>Zákazník</ord:company></ord:address></ord:partnerIdentity></ord:orderHeader><ord:orderSummary><ord:homeCurrency><ord:priceNone>neplatná částka</ord:priceNone></ord:homeCurrency></ord:orderSummary></ord:order></lst:listOrder></rsp:responsePackItem></rsp:responsePack>";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(xml));
+
+        var exception = Assert.Throws<DomainValidationException>(() => new PohodaOrderXmlParser().ParseMServerResponse(stream, "71726462", "run1"));
+
+        Assert.Contains("neplatnou částku", exception.Message);
     }
 }

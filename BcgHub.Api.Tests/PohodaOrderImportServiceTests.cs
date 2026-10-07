@@ -23,6 +23,21 @@ public sealed class PohodaOrderImportServiceTests
     }
 
     [Fact]
+    public async Task DecimalPrecisionIsNormalizedBeforeIdempotenceComparison()
+    {
+        var source = OrderData(valueCzk: 12500.505m);
+        var repository = new FakePohodaImportRepository();
+
+        var first = await ImportAsync(source, repository);
+        var second = await ImportAsync(source, repository);
+
+        Assert.Equal(1, first.ImportedCount);
+        Assert.Equal(1, second.UnchangedCount);
+        Assert.Equal(12500.51m, Assert.Single(repository.Orders).ValueCzk);
+        Assert.Equal(1, repository.SaveCount);
+    }
+
+    [Fact]
     public async Task RepeatedImportUpdatesOnlyFieldsOwnedByPohoda()
     {
         var repository = new FakePohodaImportRepository();
@@ -71,12 +86,29 @@ public sealed class PohodaOrderImportServiceTests
         Assert.Single(repository.Customers);
     }
 
+    [Fact]
+    public async Task AutomaticImportRejectsWholeResponseBeforeSavingWhenAnyOrderIsInvalid()
+    {
+        var valid = OrderData();
+        var invalid = OrderData(number: "OBJ-43", valueCzk: -1m) with { ExternalId = "12345678:43" };
+        var repository = new FakePohodaImportRepository();
+        var service = new PohodaOrderImportService(new FakeParser(valid, invalid), repository, NullLogger<PohodaOrderImportService>.Instance);
+
+        var exception = await Assert.ThrowsAsync<DomainValidationException>(() => service.ImportMServerResponseAsync(Stream.Null, "12345678", "run1", CancellationToken.None));
+
+        Assert.Contains("zastaven před zápisem", exception.Message);
+        Assert.Empty(repository.Customers);
+        Assert.Empty(repository.Orders);
+        Assert.Equal(0, repository.SaveCount);
+    }
+
     private static async Task<PohodaImportResult> ImportAsync(PohodaOrderData source, FakePohodaImportRepository repository) => await new PohodaOrderImportService(new FakeParser(source), repository, NullLogger<PohodaOrderImportService>.Instance).ImportAsync(Stream.Null, CancellationToken.None);
     private static PohodaOrderData OrderData(string? number = "OBJ-42", string title = "Objednávka", DateOnly? orderedOn = null, DateOnly? deliveryOn = null, decimal valueCzk = 12500m, PohodaCustomerData? customer = null) => new("12345678:42", number, title, "receivedOrder", customer ?? new PohodaCustomerData("Nový zákazník", "87654321", "CZ87654321", "info@example.cz", "123456789", "Hlavní 1", "Praha", "11000", "CZ"), orderedOn ?? new DateOnly(2026, 7, 12), deliveryOn ?? new DateOnly(2026, 7, 20), valueCzk);
 
     private sealed class FakeParser(params PohodaOrderData[] orders) : IPohodaOrderXmlParser
     {
-        public IReadOnlyList<PohodaOrderData> Parse(Stream xml, string? accountingUnitFallback = null, bool allowEmpty = false) => orders;
+        public IReadOnlyList<PohodaOrderData> Parse(Stream xml) => orders;
+        public IReadOnlyList<PohodaOrderData> ParseMServerResponse(Stream xml, string expectedCompanyNumber, string expectedResponseId) => orders;
     }
 
     private sealed class FakePohodaImportRepository : IPohodaImportRepository

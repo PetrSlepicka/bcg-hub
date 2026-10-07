@@ -64,9 +64,11 @@ Do konfigurace API přidejte `MicrosoftGraph__ClientId`, `MicrosoftGraph__Client
 
 ## Automatická synchronizace POHODA
 
-API stahuje nové a změněné přijaté objednávky z POHODA mServeru při startu a následně v intervalu `Pohoda:IntervalMinutes`. Poslední úspěšný checkpoint ukládá do databáze; každý požadavek používá konfigurovatelný překryv `Pohoda:OverlapMinutes`, takže opakované záznamy bezpečně zpracuje idempotentní import.
+API stahuje nové a změněné přijaté objednávky z POHODA mServeru při startu a následně v intervalu `Pohoda:IntervalMinutes`. Poslední úspěšný checkpoint ukládá do databáze; každý požadavek používá konfigurovatelný překryv `Pohoda:OverlapMinutes` (výchozí 120 minut kvůli změně zimního/letního času a případnému rozdílu hodin serverů), takže opakované záznamy bezpečně zpracuje idempotentní import.
 
 V Kubernetes nastavte v secretu `bcg-hub-secrets` klíče `PohodaEnabled` (`true`), `PohodaUsername` a `PohodaPassword`. Adresa `http://bcg.ipodnik.com:4444` a IČO `71726462` jsou v deploymentu nastavené jako necitlivé hodnoty. Přihlašovací údaje se nesmí ukládat do repozitáře ani vypisovat do logu.
+
+Pro mServer používejte samostatného uživatele POHODA s povolenou XML komunikací a pouze právem ke čtení přijatých objednávek. BCG Hub vytváří a bezpečnostní kontrolou vynucuje výhradně XML požadavek `listOrderRequest`; neposílá do POHODY doklady ani operace vytvoření, aktualizace nebo smazání. Automatický import odmítne celou odpověď před zápisem do BCG Hubu, pokud nesouhlasí IČO, schéma či stav odpovědi nebo některá objednávka obsahuje neplatná či neúplná data.
 
 Stav poslední synchronizace vrací `GET /api/orders/pohoda/sync/status`; ruční běh spouští `POST /api/orders/pohoda/sync`. Logy obsahují run ID, trigger, checkpoint, délku odpovědi, dobu běhu a počty nových, aktualizovaných, nezměněných, varovných a chybných objednávek.
 

@@ -14,16 +14,18 @@ public sealed class PohodaOrderImportService(IPohodaOrderXmlParser parser, IPoho
         return new PohodaImportPreview(rows, Count(rows, PohodaImportRowStatus.New), Count(rows, PohodaImportRowStatus.Updated), Count(rows, PohodaImportRowStatus.Unchanged), Count(rows, PohodaImportRowStatus.Warning), Count(rows, PohodaImportRowStatus.Error));
     }
 
-    public Task<PohodaImportResult> ImportAsync(Stream xml, CancellationToken cancellationToken) => ImportAsync(parser.Parse(xml), cancellationToken);
-    public Task<PohodaImportResult> ImportMServerResponseAsync(Stream xml, string companyNumber, CancellationToken cancellationToken) => ImportAsync(parser.Parse(xml, companyNumber, true), cancellationToken);
+    public Task<PohodaImportResult> ImportAsync(Stream xml, CancellationToken cancellationToken) => ImportAsync(parser.Parse(xml), false, cancellationToken);
+    public Task<PohodaImportResult> ImportMServerResponseAsync(Stream xml, string companyNumber, string expectedResponseId, CancellationToken cancellationToken) => ImportAsync(parser.ParseMServerResponse(xml, companyNumber, expectedResponseId), true, cancellationToken);
 
-    private async Task<PohodaImportResult> ImportAsync(IReadOnlyList<PohodaOrderData> data, CancellationToken cancellationToken)
+    private async Task<PohodaImportResult> ImportAsync(IReadOnlyList<PohodaOrderData> data, bool rejectEntireBatchOnError, CancellationToken cancellationToken)
     {
         var customers = (await repository.FindCustomersAsync(data.Select(x => x.Customer), cancellationToken)).ToDictionary(StringComparer.OrdinalIgnoreCase);
         var existing = await repository.FindExistingPohodaOrdersAsync(data.Select(x => x.ExternalId), cancellationToken);
         var duplicateIds = DuplicateIds(data);
         var rows = data.Select(order => CreateRow(order, customers, existing, duplicateIds)).ToList();
         foreach (var row in rows.Where(x => x.Status is PohodaImportRowStatus.Warning or PohodaImportRowStatus.Error)) logger.LogWarning("POHODA import row {PohodaOrderId} has status {Status}: {Message}", row.ExternalId, row.Status, row.Message);
+        var result = new PohodaImportResult(Count(rows, PohodaImportRowStatus.New), Count(rows, PohodaImportRowStatus.Updated), Count(rows, PohodaImportRowStatus.Unchanged), Count(rows, PohodaImportRowStatus.Warning), Count(rows, PohodaImportRowStatus.Error));
+        if (rejectEntireBatchOnError && result.ErrorCount > 0) throw new DomainValidationException($"Automatický import POHODA byl bezpečně zastaven před zápisem, protože {result.ErrorCount} objednávek obsahuje chybu.");
         var newOrders = data.Zip(rows).Where(x => x.Second.Status == PohodaImportRowStatus.New).Select(x => x.First).ToList();
         AddMissingCustomers(newOrders, customers);
         var sequences = new Dictionary<int, int>();
@@ -40,7 +42,6 @@ public sealed class PohodaOrderImportService(IPohodaOrderXmlParser parser, IPoho
             pending = 0;
         }
         if (pending > 0) { await repository.SaveImportAsync(cancellationToken); logger.LogInformation("POHODA import persisted the final batch of {BatchSize} changed orders.", pending); }
-        var result = new PohodaImportResult(Count(rows, PohodaImportRowStatus.New), Count(rows, PohodaImportRowStatus.Updated), Count(rows, PohodaImportRowStatus.Unchanged), Count(rows, PohodaImportRowStatus.Warning), Count(rows, PohodaImportRowStatus.Error));
         logger.LogInformation("POHODA import completed. Imported: {ImportedCount}, updated: {UpdatedCount}, unchanged: {UnchangedCount}, warnings: {WarningCount}, errors: {ErrorCount}.", result.ImportedCount, result.UpdatedCount, result.UnchangedCount, result.WarningCount, result.ErrorCount);
         return result;
     }
@@ -73,8 +74,11 @@ public sealed class PohodaOrderImportService(IPohodaOrderXmlParser parser, IPoho
     private static PohodaImportRow CreateRow(PohodaOrderData source, IReadOnlyDictionary<string, Guid> customers, IReadOnlyDictionary<string, Order> existing, IReadOnlySet<string> duplicateIds)
     {
         if (duplicateIds.Contains(source.ExternalId)) return Row(source, PohodaImportRowStatus.Error, "Soubor obsahuje objednávku vícekrát.");
+        if (source.ExternalId.Length > 200) return Row(source, PohodaImportRowStatus.Error, "Externí identifikátor objednávky je příliš dlouhý.");
         if (!string.Equals(source.OrderType, "receivedOrder", StringComparison.OrdinalIgnoreCase)) return Row(source, PohodaImportRowStatus.Error, "Nejde o přijatou objednávku.");
         if (string.IsNullOrWhiteSpace(source.Customer.Name)) return Row(source, PohodaImportRowStatus.Error, "Objednávka nemá název zákazníka.");
+        if (source.Number?.Length > 50 || source.Title.Length > 300) return Row(source, PohodaImportRowStatus.Error, "Číslo nebo název objednávky překračuje povolenou délku.");
+        if (!CustomerFitsDatabase(source.Customer)) return Row(source, PohodaImportRowStatus.Error, "Údaje zákazníka překračují povolenou délku.");
         if (source.ValueCzk < 0) return Row(source, PohodaImportRowStatus.Error, "Objednávka má zápornou celkovou hodnotu.");
         if (!existing.TryGetValue(source.ExternalId, out var order)) return Row(source, PohodaImportRowStatus.New, customers.ContainsKey(CustomerKey(source.Customer)) ? null : "Zákazník bude založen.");
         if (CustomerKey(order.Customer) != CustomerKey(source.Customer)) return Row(source, PohodaImportRowStatus.Warning, $"Zákazník se liší (v BCG: {order.Customer.Name}, v Pohodě: {source.Customer.Name}). Zákazník nebude změněn; ostatní údaje z Pohody budou aktualizovány.");
@@ -89,11 +93,14 @@ public sealed class PohodaOrderImportService(IPohodaOrderXmlParser parser, IPoho
     }
 
     private static string CustomerKey(BusinessPartner customer) => CustomerKey(new PohodaCustomerData(customer.Name, customer.CompanyNumber, customer.VatNumber, customer.Email, customer.Phone, customer.Street, customer.City, customer.PostalCode, customer.CountryCode));
-    private static bool HasPohodaChanges(Order order, PohodaOrderData source) => order.PohodaOrderNumber != source.Number || order.Title != source.Title || order.OrderedOn != source.OrderedOn || order.RequestedDeliveryOn != source.DeliveryOn || order.ValueCzk != source.ValueCzk;
-    private static void ApplyPohodaChanges(Order order, PohodaOrderData source) { order.PohodaOrderNumber = source.Number; order.Title = source.Title; order.OrderedOn = source.OrderedOn; order.RequestedDeliveryOn = source.DeliveryOn; order.ValueCzk = source.ValueCzk; }
+    private static bool HasPohodaChanges(Order order, PohodaOrderData source) => order.PohodaOrderNumber != source.Number || order.Title != source.Title || order.OrderedOn != source.OrderedOn || order.RequestedDeliveryOn != source.DeliveryOn || order.ValueCzk != StoredValue(source.ValueCzk);
+    private static void ApplyPohodaChanges(Order order, PohodaOrderData source) { order.PohodaOrderNumber = source.Number; order.Title = source.Title; order.OrderedOn = source.OrderedOn; order.RequestedDeliveryOn = source.DeliveryOn; order.ValueCzk = StoredValue(source.ValueCzk); }
     private static int Count(IEnumerable<PohodaImportRow> rows, PohodaImportRowStatus status) => rows.Count(x => x.Status == status);
 
-    private static PohodaImportRow Row(PohodaOrderData order, PohodaImportRowStatus status, string? message) => new(order.ExternalId, order.Number, order.Title, order.Customer.Name, order.Customer.CompanyNumber, order.OrderedOn, order.DeliveryOn, order.ValueCzk, status, message);
+    private static PohodaImportRow Row(PohodaOrderData order, PohodaImportRowStatus status, string? message) => new(order.ExternalId, order.Number, order.Title, order.Customer.Name, order.Customer.CompanyNumber, order.OrderedOn, order.DeliveryOn, StoredValue(order.ValueCzk), status, message);
     private static IReadOnlySet<string> DuplicateIds(IEnumerable<PohodaOrderData> orders) => orders.GroupBy(x => x.ExternalId, StringComparer.OrdinalIgnoreCase).Where(x => x.Count() > 1).Select(x => x.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    private static bool CustomerFitsDatabase(PohodaCustomerData customer) => customer.Name.Length <= 250 && Fits(customer.CompanyNumber, 50) && Fits(customer.VatNumber, 50) && Fits(customer.Email, 320) && Fits(customer.Phone, 100) && Fits(customer.Street, 300) && Fits(customer.City, 200) && Fits(customer.PostalCode, 30) && Fits(customer.CountryCode, 2);
+    private static bool Fits(string? value, int maximumLength) => value is null || value.Length <= maximumLength;
+    private static decimal StoredValue(decimal value) => decimal.Round(value, 2, MidpointRounding.AwayFromZero);
     private static string Normalize(string value) => new(value.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
 }

@@ -38,6 +38,7 @@ builder.Services.AddScoped<IPohodaImportRepository>(services => services.GetRequ
 builder.Services.AddScoped<IPohodaOrderImportService, PohodaOrderImportService>();
 builder.Services.Configure<PohodaOptions>(builder.Configuration.GetSection("Pohoda"));
 builder.Services.AddHttpClient("PohodaMServer", client => client.Timeout = Timeout.InfiniteTimeSpan).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate });
+builder.Services.AddSingleton<IPohodaOrderExportRequestFactory, PohodaOrderExportRequestFactory>();
 builder.Services.AddSingleton<IPohodaMServerClient, PohodaMServerClient>();
 builder.Services.AddSingleton<IPohodaSyncStateStore, PohodaSyncStateStore>();
 builder.Services.AddSingleton<IPohodaSyncLock, PohodaSyncLock>();
